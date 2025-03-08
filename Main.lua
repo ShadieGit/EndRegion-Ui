@@ -1,708 +1,936 @@
-local function FineInstance(className, properties)
-    local inst = Instance.new(className)
-    if properties then
-        for prop, value in pairs(properties) do
-            pcall(function() inst[prop] = value end)
-        end
-    end
-    return inst
-end
-
-local function AutoSpace(parent, margin)
-    margin = margin or 10
-    local offset = margin
-    for _, child in ipairs(parent:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child.Position = UDim2.new(child.Position.X.Scale, margin, child.Position.Y.Scale, offset)
-            offset = offset + child.AbsoluteSize.Y + margin
-        end
-    end
-end
-
-local function AutoHeight(parent)
-    local totalHeight = 0
-    for _, child in ipairs(parent:GetChildren()) do
-        if child:IsA("GuiObject") then
-            totalHeight = totalHeight + child.AbsoluteSize.Y
-        end
-    end
-    parent.Size = UDim2.new(parent.Size.X.Scale, parent.Size.X.Offset, 0, totalHeight)
-end
-
-local function AutoWidth(parent)
-    local maxWidth = 0
-    for _, child in ipairs(parent:GetChildren()) do
-        if child:IsA("GuiObject") then
-            if child.AbsoluteSize.X > maxWidth then
-                maxWidth = child.AbsoluteSize.X
-            end
-        end
-    end
-    parent.Size = UDim2.new(0, maxWidth, parent.Size.Y.Scale, parent.Size.Y.Offset)
-end
-
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
+
 local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+if not LocalPlayer then warn("LocalPlayer not found.") return end
+
+local function CreateInstance(className, props)
+	local inst = Instance.new(className)
+	if props then
+		for prop, val in pairs(props) do
+			local ok, err = pcall(function() inst[prop] = val end)
+			if not ok then warn("[EndRegionUI] "..prop.." error - "..tostring(err)) end
+		end
+	end
+	return inst
+end
 
 local EndRegionUI = {}
-EndRegionUI.CategoryButtons = {}
-EndRegionUI.CategoryFrames = {}
+EndRegionUI.CatButtons = {}
+EndRegionUI.CatFrames = {}
 EndRegionUI.HighlightEnabled = false
 EndRegionUI.SpinEnabled = false
-EndRegionUI.HighlightTheme = "light"
+EndRegionUI.NoclipEnabled = false
+EndRegionUI.InfJumpEnabled = false
+EndRegionUI.MultiJumpEnabled = false
+EndRegionUI.MultiJumpMax = 1
+EndRegionUI.CurrentJumpCount = 0
+EndRegionUI._db = false
+EndRegionUI.ShaderOn = false
+EndRegionUI.RainOn = false
+EndRegionUI.ESPEnabled = false
+EndRegionUI.ESPObjects = {}
 
-function EndRegionUI:showNotification(message, duration)
-    if message:find("UI loaded successfully") then
-        pcall(function() StarterGui:SetCore("SendNotification", {Title = "EndRegion", Text = tostring(message), Duration = duration or 2, Button1 = "OK"}) end)
-        print("[EndRegion] " .. tostring(message))
-    else
-        print("[EndRegion] " .. tostring(message))
-    end
+EndRegionUI.notify = function(self, title, msg, dur)
+	title = title or "EndRegionUI"
+	dur = dur or 2
+	pcall(function() StarterGui:SetCore("SendNotification", {Title = title, Text = msg, Duration = dur, Button1 = "OK"}) end)
+	print("["..title.."] "..msg)
 end
 
-function EndRegionUI:applyStat(statName, value)
-    local character = LocalPlayer.Character
-    if not character then return end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    if statName == "Jump Power" and humanoid then
-        humanoid.JumpPower = value
-    elseif statName == "Gravity" then
-        workspace.Gravity = value
-    elseif statName == "Walk Speed" and humanoid then
-        humanoid.WalkSpeed = value
-    elseif statName == "Hip Height" and humanoid then
-        humanoid.HipHeight = value
-    elseif statName == "Camera FOV" then
-        workspace.CurrentCamera.FieldOfView = value
-    end
-    print("[EndRegion] " .. statName .. " set to " .. tostring(value))
+EndRegionUI.checkInput = function(self, val, mi, ma)
+	local n = tonumber(val)
+	if n and n >= mi and n <= ma then return true, n end
+	return false, n
 end
 
-function EndRegionUI:initUI()
-    local screenGui = FineInstance("ScreenGui", { Name = "EndRegionUI", ResetOnSpawn = false })
-    screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-
-    local mainFrame = FineInstance("Frame", {
-        Name = "MainFrame",
-        BackgroundColor3 = Color3.fromRGB(30, 30, 30),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        Size = UDim2.new(0, 800, 0, 600),
-        BorderSizePixel = 0,
-    })
-    mainFrame.Parent = screenGui
-    mainFrame.Active = true
-    mainFrame.Draggable = true
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 8) }).Parent = mainFrame
-
-    local aspect = FineInstance("UIAspectRatioConstraint", {
-        AspectRatio = 800 / 600,
-        AspectType = Enum.AspectType.ScaleWithParentSize,
-        DominantAxis = Enum.DominantAxis.Width,
-    })
-    aspect.Parent = mainFrame
-
-    local titleFrame = FineInstance("Frame", {
-        Name = "TitleFrame",
-        BackgroundColor3 = Color3.fromRGB(15, 15, 15),
-        Position = UDim2.new(0.5, 0, 0, 10),
-        Size = UDim2.new(0, 500, 0, 50),
-        AnchorPoint = Vector2.new(0.5, 0),
-    })
-    titleFrame.Parent = mainFrame
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 6) }).Parent = titleFrame
-
-    local titleGradient = FineInstance("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 60)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 20))
-        }),
-        Rotation = 45,
-    })
-    titleGradient.Parent = titleFrame
-    local titleStroke = FineInstance("UIStroke", { Color = Color3.fromRGB(80, 80, 100), Thickness = 2 })
-    titleStroke.Parent = titleFrame
-    local titleLabel = FineInstance("TextLabel", {
-        Name = "TitleLabel",
-        Text = "EndRegion",
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 18,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    FineInstance("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 1 }).Parent = titleLabel
-    titleLabel.Parent = titleFrame
-
-    local openButton = FineInstance("TextButton", {
-        Name = "OpenButton",
-        Text = "E",
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 16,
-        BackgroundColor3 = Color3.fromRGB(15, 15, 15),
-        Size = UDim2.new(0, 40, 0, 40),
-        AnchorPoint = Vector2.new(0.5, 0),
-        Position = UDim2.new(0.5, 0, 0, 10),
-        BorderSizePixel = 0,
-        TextColor3 = Color3.new(1, 1, 1),
-        Visible = true
-    })
-    openButton.ZIndex = 10
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 8) }).Parent = openButton
-    openButton.Parent = screenGui
-    openButton.MouseButton1Click:Connect(function()
-        mainFrame.Visible = true
-        openButton.Visible = false
-        print("[EndRegion] UI opened.")
-    end)
-
-    local closeButton = FineInstance("TextButton", {
-        Name = "CloseButton",
-        Text = "X",
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 16,
-        BackgroundColor3 = Color3.fromRGB(200, 50, 50),
-        Size = UDim2.new(0, 30, 0, 30),
-        AnchorPoint = Vector2.new(1, 0),
-        Position = UDim2.new(1, -5, 0, 5),
-        BorderSizePixel = 0,
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 15) }).Parent = closeButton
-    closeButton.Parent = titleFrame
-    closeButton.MouseButton1Click:Connect(function()
-        mainFrame.Visible = false
-        openButton.Visible = true
-        print("[EndRegion] UI closed.")
-    end)
-
-    local categoriesPanel = FineInstance("Frame", {
-        Name = "CategoriesPanel",
-        BackgroundColor3 = Color3.fromRGB(40, 40, 40),
-        Position = UDim2.new(0, 0, 0, 70),
-        Size = UDim2.new(0, 220, 1, -70),
-        BorderSizePixel = 0
-    })
-    categoriesPanel.Parent = mainFrame
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 6) }).Parent = categoriesPanel
-
-    local contentArea = FineInstance("Frame", {
-        Name = "ContentArea",
-        BackgroundColor3 = Color3.fromRGB(35, 35, 35),
-        Position = UDim2.new(0, 220, 0, 70),
-        Size = UDim2.new(1, -220, 1, -70),
-        BorderSizePixel = 0
-    })
-    contentArea.Parent = mainFrame
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 6) }).Parent = contentArea
-
-    local divider = FineInstance("Frame", {
-        Name = "Divider",
-        BackgroundColor3 = Color3.fromRGB(80, 80, 80),
-        Position = UDim2.new(0, 220, 0, 70),
-        Size = UDim2.new(0, 2, 1, -70),
-        BorderSizePixel = 0
-    })
-    divider.Parent = mainFrame
-
-    local categoriesList = { "Home", "Settings", "Player Mods" }
-    for _, cat in ipairs(categoriesList) do
-        local catFrame = FineInstance("Frame", {
-            Name = cat .. "Frame",
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, 0, 1, 0),
-            Position = UDim2.new(1, 0, 0, 0)
-        })
-        catFrame.Parent = contentArea
-        self.CategoryFrames[cat] = catFrame
-        catFrame.Visible = false
-    end
-    self.CategoryFrames["Home"].Position = UDim2.new(0, 0, 0, 0)
-    self.CategoryFrames["Home"].Visible = true
-
-    self:setupHomeCategory(self.CategoryFrames["Home"])
-    self:setupSettingsCategory(self.CategoryFrames["Settings"], mainFrame)
-    self:setupPlayerModsCategory(self.CategoryFrames["Player Mods"])
-
-    local BUTTON_HEIGHT = 24
-    local BUTTON_PADDING = 12
-    for index, catName in ipairs(categoriesList) do
-        local catButton = FineInstance("TextButton", {
-            Name = catName .. "Button",
-            Text = catName,
-            Font = Enum.Font.Gotham,
-            TextScaled = true,
-            TextSize = 14,
-            BackgroundColor3 = Color3.fromRGB(55, 55, 55),
-            Size = UDim2.new(1, -2 * BUTTON_PADDING, 0, BUTTON_HEIGHT),
-            Position = UDim2.new(0, BUTTON_PADDING, 0, (index - 1) * (BUTTON_HEIGHT + BUTTON_PADDING) + BUTTON_PADDING),
-            BorderSizePixel = 0,
-            TextColor3 = Color3.new(1, 1, 1)
-        })
-        FineInstance("UICorner", { CornerRadius = UDim.new(0, 4) }).Parent = catButton
-        catButton.Parent = categoriesPanel
-        self.CategoryButtons[catName] = catButton
-        catButton.MouseEnter:Connect(function()
-            TweenService:Create(catButton, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(75, 75, 75) }):Play()
-        end)
-        catButton.MouseLeave:Connect(function()
-            TweenService:Create(catButton, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(55, 55, 55) }):Play()
-        end)
-        catButton.MouseButton1Click:Connect(function() self:switchCategory(catName) end)
-    end
-
-    self:SetupHighlightListeners()
-    self:showNotification("UI loaded successfully", 3)
+EndRegionUI.setStat = function(self, stat, v)
+	local char = LocalPlayer.Character
+	if not char then self:notify("Error", "Character not found",2) return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if stat == "Jump Power" and hum then hum.JumpPower = v
+	elseif stat == "Gravity" then Workspace.Gravity = v
+	elseif stat == "Walk Speed" and hum then hum.WalkSpeed = v
+	elseif stat == "Hip Height" and hum then hum.HipHeight = v
+	elseif stat == "Camera FOV" then Workspace.CurrentCamera.FieldOfView = v
+	else self:notify("Error", "Invalid stat: "..tostring(stat),2) return end
+	print(stat.." = "..tostring(v))
 end
 
-function EndRegionUI:switchCategory(activeCategory)
-    for cat, frame in pairs(self.CategoryFrames) do
-        if frame then
-            if cat == activeCategory then
-                frame.Visible = true
-                frame.Position = UDim2.new(1, 0, 0, 0)
-                TweenService:Create(frame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.new(0, 0, 0, 0) }):Play()
-            else
-                frame.Visible = false
-            end
-        else
-            print("[EndRegion] Missing frame for category: " .. tostring(cat))
-        end
-    end
+EndRegionUI.hasTools = function(self, p)
+	local cnt = 0
+	local bp = p:FindFirstChild("Backpack")
+	if bp then
+		for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then cnt = cnt + 1 end end
+	end
+	if p.Character then
+		for _, t in ipairs(p.Character:GetChildren()) do if t:IsA("Tool") then cnt = cnt + 1 end end
+	end
+	return (cnt > 0), cnt
 end
 
-function EndRegionUI:setupHomeCategory(homeFrame)
-    local profileCard = FineInstance("Frame", {
-        Name = "ProfileCard",
-        BackgroundColor3 = Color3.fromRGB(35, 35, 35),
-        Size = UDim2.new(0, 260, 0, 150),
-        Position = UDim2.new(0, 20, 0, 20),
-        BorderSizePixel = 0
-    })
-    profileCard.Parent = homeFrame
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 6) }).Parent = profileCard
-
-    local cardGradient = FineInstance("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 50, 70)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 30, 40))
-        }),
-        Rotation = 90
-    })
-    cardGradient.Parent = profileCard
-
-    local profilePic = FineInstance("ImageLabel", {
-        Name = "ProfilePic",
-        Size = UDim2.new(0, 80, 0, 80),
-        Position = UDim2.new(0, 10, 0, 10),
-        BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-        BorderSizePixel = 0,
-        Image = "",
-        ScaleType = Enum.ScaleType.Crop
-    })
-    profilePic.Parent = profileCard
-    FineInstance("UICorner", { CornerRadius = UDim.new(1, 0) }).Parent = profilePic
-
-    local picStroke = FineInstance("UIStroke", { Color = Color3.fromRGB(80, 80, 80), Thickness = 2 })
-    picStroke.Parent = profilePic
-
-    local success, thumbnail = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100) end)
-    if success and thumbnail then
-        profilePic.Image = thumbnail
-    else
-        print("[EndRegion] Failed to fetch profile picture for UserId " .. tostring(LocalPlayer.UserId))
-        profilePic.Image = "rbxassetid://1"
-    end
-
-    local usernameLabel = FineInstance("TextLabel", {
-        Name = "Username",
-        Text = LocalPlayer.Name,
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 14,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 180, 0, 30),
-        Position = UDim2.new(0, 100, 0, 10),
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    FineInstance("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 1 }).Parent = usernameLabel
-    usernameLabel.Parent = profileCard
-
-    local displayNameLabel = FineInstance("TextLabel", {
-        Name = "DisplayName",
-        Text = LocalPlayer.DisplayName or "N/A",
-        Font = Enum.Font.Gotham,
-        TextScaled = true,
-        TextSize = 12,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 180, 0, 25),
-        Position = UDim2.new(0, 100, 0, 45),
-        TextColor3 = Color3.fromRGB(200, 200, 200)
-    })
-    local dispStroke = FineInstance("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 1 })
-    dispStroke.Parent = displayNameLabel
-    displayNameLabel.Parent = profileCard
-
-    local userIDLabel = FineInstance("TextLabel", {
-        Name = "UserID",
-        Text = "ID: " .. tostring(LocalPlayer.UserId),
-        Font = Enum.Font.Gotham,
-        TextScaled = true,
-        TextSize = 12,
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 180, 0, 25),
-        Position = UDim2.new(0, 100, 0, 75),
-        TextColor3 = Color3.fromRGB(150, 150, 150)
-    })
-    local idStroke = FineInstance("UIStroke", { Color = Color3.new(0, 0, 0), Thickness = 1 })
-    idStroke.Parent = userIDLabel
-    userIDLabel.Parent = profileCard
+EndRegionUI.updateCanvas = function(self, sf)
+	local layout = sf:FindFirstChildOfClass("UIListLayout")
+	if layout then
+		layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() sf.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+16) end)
+		sf.CanvasSize = UDim2.new(0,0,0,layout.AbsoluteContentSize.Y+16)
+	end
 end
 
-function EndRegionUI:setupPlayerModsCategory(modsFrame)
-    local scrollingFrame = FineInstance("ScrollingFrame", {
-        Name = "StatsScroller",
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        ScrollBarThickness = 8,
-        ScrollingEnabled = true,
-        CanvasSize = UDim2.new(0, 0, 0, 0)
-    })
-    scrollingFrame.Parent = modsFrame
-
-    local layout = FineInstance("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder })
-    layout.Parent = scrollingFrame
-    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 8)
-    end)
-
-    local stats = {
-        { name = "Jump Power", min = 10, max = 300 },
-        { name = "Gravity", min = 10, max = 300 },
-        { name = "Walk Speed", min = 10, max = 300 },
-        { name = "Hip Height", min = 0, max = 10 },
-        { name = "Camera FOV", min = 70, max = 120 }
-    }
-    for index, stat in     ipairs(stats) do
-        local container = FineInstance("Frame", {
-            Name = stat.name .. "Container",
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, -40, 0, 35),
-            LayoutOrder = index
-        })
-        container.Parent = scrollingFrame
-
-        local statButton = FineInstance("TextButton", {
-            Name = stat.name .. "Button",
-            Text = stat.name,
-            Font = Enum.Font.GothamBold,
-            TextScaled = true,
-            TextSize = 14,
-            BackgroundColor3 = Color3.fromRGB(55, 55, 55),
-            Size = UDim2.new(0, 120, 1, 0),
-            BorderSizePixel = 0,
-            TextColor3 = Color3.new(1, 1, 1)
-        })
-        FineInstance("UICorner", { CornerRadius = UDim.new(0, 4) }).Parent = statButton
-        statButton.Parent = container
-
-        local inputBox = FineInstance("TextBox", {
-            Name = stat.name .. "Input",
-            Text = "",
-            PlaceholderText = "Enter (" .. stat.min .. "-" .. stat.max .. ")",
-            Font = Enum.Font.Gotham,
-            TextScaled = true,
-            TextSize = 14,
-            BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-            Size = UDim2.new(0, 120, 1, 0),
-            Position = UDim2.new(0, 130, 0, 0),
-            BorderSizePixel = 0,
-            TextColor3 = Color3.new(1, 1, 1)
-        })
-        FineInstance("UICorner", { CornerRadius = UDim.new(0, 4) }).Parent = inputBox
-        inputBox.Parent = container
-
-        statButton.MouseButton1Click:Connect(function()
-            local valid, num = EndRegionUI:validateInput(inputBox.Text, stat.min, stat.max)
-            if valid then
-                EndRegionUI:applyStat(stat.name, num)
-            end
-        end)
-        inputBox.FocusLost:Connect(function()
-            local valid, num = EndRegionUI:validateInput(inputBox.Text, stat.min, stat.max)
-            if valid then
-                inputBox.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
-                EndRegionUI:applyStat(stat.name, num)
-            else
-                inputBox.BackgroundColor3 = Color3.fromRGB(100, 0, 0)
-                inputBox.Text = ""
-                print("[EndRegion] Invalid input for " .. stat.name)
-            end
-        end)
-    end
-
-    local spinContainer = FineInstance("Frame", {
-        Name = "SpinContainer",
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -40, 0, 35),
-        LayoutOrder = #stats + 1
-    })
-    spinContainer.Parent = scrollingFrame
-
-    local spinButton = FineInstance("TextButton", {
-        Name = "SpinButton",
-        Text = "Spin",
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 14,
-        BackgroundColor3 = Color3.fromRGB(55, 55, 55),
-        Size = UDim2.new(0, 120, 1, 0),
-        BorderSizePixel = 0,
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    FineInstance("UICorner", { CornerRadius = UDim.new(0, 4) }).Parent = spinButton
-    spinButton.Parent = spinContainer
-    spinButton.MouseButton1Click:Connect(function()
-        EndRegionUI:ToggleSpin()
-    end)
+EndRegionUI.addCat = function(self, name)
+	if type(name) ~= "string" or name == "" then self:notify("Error", "Invalid category name",2) return end
+	local btn = CreateInstance("TextButton", {Name = name.."Btn", Text = name, BorderSizePixel = 0, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(60,60,60), Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = Color3.fromRGB(240,240,240), Size = UDim2.new(1,0,0,40)})
+	local grad = CreateInstance("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(80,80,80)), ColorSequenceKeypoint.new(1,Color3.fromRGB(60,60,60))}), Rotation = 90})
+	grad.Parent = btn
+	local crn = CreateInstance("UICorner", {CornerRadius = UDim.new(0,8)})
+	crn.Parent = btn
+	btn.Parent = self.CategoriesPanel
+	self.CatButtons[name] = btn
+	btn.MouseButton1Click:Connect(function() self:switchCat(name) end)
+	local sf = CreateInstance("ScrollingFrame", {Name = name.."Frame", Size = UDim2.new(1,0,1,0), BorderSizePixel = 0, BackgroundTransparency = 1, ScrollBarThickness = 4, ScrollingEnabled = true})
+	local layout2 = CreateInstance("UIListLayout", {Padding = UDim.new(0,8), SortOrder = Enum.SortOrder.LayoutOrder})
+	layout2.Parent = sf
+	local pad = CreateInstance("UIPadding", {PaddingTop = UDim.new(0,8), PaddingBottom = UDim.new(0,8), PaddingLeft = UDim.new(0,8), PaddingRight = UDim.new(0,8)})
+	pad.Parent = sf
+	sf.Parent = self.ContentArea
+	self.CatFrames[name] = sf
+	self:updateCanvas(sf)
+	sf.Visible = false
 end
 
-function EndRegionUI:setupSettingsCategory(settingsFrame, mainFrame)
-    local yOffset = 20
-    local resizeLabel = FineInstance("TextLabel", {
-        Name = "ResizeLabel",
-        Text = "UI Dimensions (min:500x400, max:1920x1080):",
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 14,
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 300, 0, 30),
-        Position = UDim2.new(0, 20, 0, yOffset),
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    resizeLabel.Parent = settingsFrame
-    yOffset = yOffset + 40
-
-    local widthInput = FineInstance("TextBox", {
-        Name = "WidthInput",
-        Text = "500",
-        PlaceholderText = "Width",
-        Font = Enum.Font.Gotham,
-        TextScaled = true,
-        TextSize = 14,
-        BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-        Size = UDim2.new(0, 100, 0, 30),
-        Position = UDim2.new(0, 20, 0, yOffset),
-        BorderSizePixel = 0,
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    widthInput.Parent = settingsFrame
-
-    local heightInput = FineInstance("TextBox", {
-        Name = "HeightInput",
-        Text = "400",
-        PlaceholderText = "Height",
-        Font = Enum.Font.Gotham,
-        TextScaled = true,
-        TextSize = 14,
-        BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-        Size = UDim2.new(0, 100, 0, 30),
-        Position = UDim2.new(0, 130, 0, yOffset),
-        BorderSizePixel = 0,
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    heightInput.Parent = settingsFrame
-    yOffset = yOffset + 50
-
-    local resizeButton = FineInstance("TextButton", {
-        Name = "ResizeButton",
-        Text = "Resize UI",
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 14,
-        BackgroundColor3 = Color3.fromRGB(0, 170, 255),
-        TextColor3 = Color3.new(1, 1, 1),
-        Size = UDim2.new(0, 120, 0, 30),
-        Position = UDim2.new(0, 20, 0, yOffset),
-        BorderSizePixel = 0
-    })
-    resizeButton.Parent = settingsFrame
-    resizeButton.MouseButton1Click:Connect(function()
-        local newWidth = tonumber(widthInput.Text)
-        local newHeight = tonumber(heightInput.Text)
-        if newWidth and newHeight and newWidth >= 500 and newHeight >= 400 and newWidth <= 1920 and newHeight <= 1080 then
-            if mainFrame then
-                mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
-                print("[EndRegion] UI resized to " .. newWidth .. "x" .. newHeight)
-            else
-                print("[EndRegion] MainFrame not found for resizing.")
-            end
-        else
-            print("[EndRegion] Invalid or out-of-bound UI dimensions.")
-        end
-    end)
-    yOffset = yOffset + 50
-
-    local resetPosButton = FineInstance("TextButton", {
-        Name = "ResetPosButton",
-        Text = "Reset Position",
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextSize = 14,
-        BackgroundColor3 = Color3.fromRGB(55, 55, 55),
-        Size = UDim2.new(0, 140, 0, 30),
-        Position = UDim2.new(0, 20, 0, yOffset),
-        BorderSizePixel = 0,
-        TextColor3 = Color3.new(1, 1, 1)
-    })
-    resetPosButton.Parent = settingsFrame
-    resetPosButton.MouseButton1Click:Connect(function()
-        if mainFrame then
-            mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-            print("[EndRegion] UI reset to centered position.")
-        else
-            print("[EndRegion] MainFrame not found for UI reset.")
-        end
-    end)
+EndRegionUI.addItem = function(self, name, cate, hasInput, callback)
+	if type(name) ~= "string" or name == "" then self:notify("Error", "Invalid item name",2) return end
+	if type(cate) ~= "string" or cate == "" then self:notify("Error", "Invalid category",2) return end
+	if type(hasInput) ~= "boolean" then self:notify("Error", "hasInput must be boolean",2) return end
+	if type(callback) ~= "function" then self:notify("Error", "Callback must be function",2) return end
+	local parentFrame = self.CatFrames[cate]
+	if not parentFrame then self:notify("Error", "Category '"..cate.."' does not exist",2) return end
+	local cont = CreateInstance("Frame", {Name = name.."Cont", Size = UDim2.new(1,0,0,40), BorderSizePixel = 0, BackgroundTransparency = 1})
+	cont.Parent = parentFrame
+	local btn = CreateInstance("TextButton", {Name = name.."Btn", Text = name, BorderSizePixel = 0, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(80,80,80), Font = Enum.Font.Gotham, TextScaled = true, TextColor3 = Color3.fromRGB(255,255,255), Size = UDim2.new(0,140,1,0)})
+	local grad = CreateInstance("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(90,90,90)), ColorSequenceKeypoint.new(1,Color3.fromRGB(70,70,70))}), Rotation = 90})
+	grad.Parent = btn
+	local crn = CreateInstance("UICorner", {CornerRadius = UDim.new(0,6)})
+	crn.Parent = btn
+	btn.Parent = cont
+	if hasInput then
+		local input = CreateInstance("TextBox", {Name = name.."Input", Text = "", PlaceholderText = "Enter value", PlaceholderColor3 = Color3.fromRGB(150,150,150), BorderSizePixel = 0, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(60,60,60), Font = Enum.Font.Gotham, TextScaled = true, TextColor3 = Color3.fromRGB(240,240,240), Size = UDim2.new(0,120,1,0), Position = UDim2.new(0,150,0,0)})
+		input.Parent = cont
+		btn.MouseButton1Click:Connect(function()
+			local txt = input.Text
+			if txt == "" then
+				self:notify("Input Error", "Enter a value",2)
+			else
+				if tonumber(txt) then
+					local valid, num = self:checkInput(txt, 0, 10000)
+					if valid then
+						input.TextColor3 = Color3.fromRGB(0,255,0)
+						callback(txt)
+					else
+						input.TextColor3 = Color3.fromRGB(255,0,0)
+						input.Text = ""
+						self:notify("Input Error", "Invalid number",2)
+					end
+				else
+					callback(txt)
+				end
+			end
+		end)
+	else
+		btn.MouseButton1Click:Connect(callback)
+	end
 end
 
-function EndRegionUI:validateInput(inputValue, minVal, maxVal)
-    local num = tonumber(inputValue)
-    if num and num >= minVal and num <= maxVal then
-        return true, num
-    end
-    return false, num
+EndRegionUI.switchCat = function(self, name)
+	for k, frm in pairs(self.CatFrames) do
+		frm.Visible = (k == name)
+	end
 end
 
-function EndRegionUI:ToggleHighlights()
-    self.HighlightEnabled = not self.HighlightEnabled
-    print("[EndRegion] ESP toggled: " .. tostring(self.HighlightEnabled))
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player.Character then
-            local char = player.Character
-            local head = char:FindFirstChild("Head")
-            if self.HighlightEnabled then
-                if head and not head:FindFirstChild("UsernameBillboard") then
-                    local billboard = FineInstance("BillboardGui", {
-                        Name = "UsernameBillboard",
-                        Adornee = head,
-                        Size = UDim2.new(0, 100, 0, 50),
-                        StudsOffset = Vector3.new(0, 2, 0),
-                        AlwaysOnTop = true
-                    })
-                    local textLabel = FineInstance("TextLabel", {
-                        Size = UDim2.new(1, 0, 1, 0),
-                        BackgroundTransparency = 1,
-                        Text = char.Name,
-                        TextColor3 = Color3.new(1, 1, 1),
-                        Font = Enum.Font.GothamBold,
-                        TextScaled = true,
-                        TextSize = 14
-                    })
-                    textLabel.Parent = billboard
-                    billboard.Parent = head
-                end
-                if not char:FindFirstChild("PlayerHighlight") then
-                    local hl = FineInstance("Highlight", {
-                        Name = "PlayerHighlight",
-                        FillColor = Color3.new(1, 1, 1),
-                        OutlineColor = Color3.new(1, 1, 1),
-                        Enabled = true
-                    })
-                    hl.Parent = char
-                end
-            else
-                if head and head:FindFirstChild("UsernameBillboard") then
-                    head.UsernameBillboard:Destroy()
-                end
-                local hl = char:FindFirstChild("PlayerHighlight")
-                if hl then hl:Destroy() end
-            end
-        end
-    end
+EndRegionUI.setupHome = function(self)
+	local frm = self.CatFrames["Home"]
+	if not frm then return end
+	local card = CreateInstance("Frame", {Name = "ProfileCard", Size = UDim2.new(1,-16,0,220), BorderSizePixel = 0, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(30,30,30)})
+	local grad = CreateInstance("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(50,50,70)), ColorSequenceKeypoint.new(1,Color3.fromRGB(20,20,40))}), Rotation = 45})
+	grad.Parent = card
+	local crn = CreateInstance("UICorner", {CornerRadius = UDim.new(0,12)})
+	crn.Parent = card
+	card.Parent = frm
+	local pic = CreateInstance("ImageLabel", {Name = "ProfilePic", Size = UDim2.new(0,80,0,80), Position = UDim2.new(0,10,0,10), BorderSizePixel = 0, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(20,20,20), Image = ""})
+	local pcrn = CreateInstance("UICorner", {CornerRadius = UDim.new(1,0)})
+	pcrn.Parent = pic
+	pic.Parent = card
+	local suc, thumb = pcall(function() return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100) end)
+	if suc and thumb then pic.Image = thumb else pic.Image = "rbxassetid://1" end
+	local info = CreateInstance("Frame", {Name = "InfoFrame", Size = UDim2.new(1,-100,1,0), Position = UDim2.new(0,100,0,10), BorderSizePixel = 0, BackgroundTransparency = 1})
+	info.Parent = card
+	local il = CreateInstance("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,4)})
+	il.Parent = info
+	local addI = function(txt) local lbl = CreateInstance("TextLabel", {Text = txt, Font = Enum.Font.Gotham, TextScaled = true, BorderSizePixel = 0, BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(255,255,255), Size = UDim2.new(1,0,0,30)}) lbl.Parent = info end
+	addI("Username: " .. LocalPlayer.Name)
+	addI("Display: " .. (LocalPlayer.DisplayName or "N/A"))
+	addI("ID: " .. tostring(LocalPlayer.UserId))
+	addI("Premium: " .. (LocalPlayer.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"))
 end
 
-function EndRegionUI:SetupHighlightListeners()
-    for _, player in pairs(game.Players:GetPlayers()) do
-        player.CharacterAdded:Connect(function(char)
-            self:SetHighlight(char, self.HighlightEnabled)
-        end)
-    end
-    game.Players.PlayerAdded:Connect(function(player)
-        player.CharacterAdded:Connect(function(char)
-            self:SetHighlight(char, self.HighlightEnabled)
-        end)
-    end)
+EndRegionUI.setupPlayerMods = function(self)
+	local frm = self.CatFrames["Player Mods"]
+	if not frm then return end
+	self:addItem("Set Walk Speed", "Player Mods", true, function(val)
+		local s = tonumber(val)
+		if s then
+			local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.WalkSpeed = s end
+			self:notify("Player Mods", "Walk Speed set to " .. s, 2)
+		end
+	end)
+	self:addItem("Set Jump Power", "Player Mods", true, function(val)
+		local p = tonumber(val)
+		if p then
+			local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.JumpPower = p end
+			self:notify("Player Mods", "Jump Power set to " .. p, 2)
+		end
+	end)
+	self:addItem("Set Gravity", "Player Mods", true, function(val)
+		local g = tonumber(val)
+		if g then
+			Workspace.Gravity = g
+			self:notify("Player Mods", "Gravity set to " .. g, 2)
+		end
+	end)
+	self:addItem("Set Hip Height", "Player Mods", true, function(val)
+		local h = tonumber(val)
+		if h then
+			local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.HipHeight = h end
+			self:notify("Player Mods", "Hip Height set to " .. h, 2)
+		end
+	end)
+	self:addItem("NoClip", "Player Mods", false, function()
+		EndRegionUI.Noclip = not EndRegionUI.Noclip
+		self:notify("Player Mods", "NoClip " .. (EndRegionUI.Noclip and "On" or "Off"), 2)
+	end)
+	self:addItem("Spin", "Player Mods", false, function()
+		self:applySpin()
+		self:notify("Player Mods", "Spin " .. (EndRegionUI.Spin and "On" or "Off"), 2)
+	end)
+	self:addItem("Set Spin Speed", "Player Mods", true, function(val)
+		local spd = tonumber(val)
+		if spd then
+			EndRegionUI.SpinSpeed = spd
+			if EndRegionUI.Spin and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+				local hrp = LocalPlayer.Character.HumanoidRootPart
+				if hrp:FindFirstChild("SpinAngularVelocity") then
+					hrp.SpinAngularVelocity.AngularVelocity = Vector3.new(0, spd, 0)
+				end
+			end
+			self:notify("Player Mods", "Spin speed set to " .. spd, 2)
+		end
+	end)
+	self:addItem("Reset", "Player Mods", false, function()
+		local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.WalkSpeed = 16
+			hum.JumpPower = 50
+			hum.HipHeight = 2
+		end
+		Workspace.Gravity = 196.2
+		self:notify("Player Mods", "Reset Done", 2)
+	end)
+	self:addItem("ESP", "Player Mods", false, function()
+		self:toggleESP()
+		self:notify("Player Mods", "ESP " .. (EndRegionUI.ESPEnabled and "On" or "Off"), 2)
+	end)
 end
 
-function EndRegionUI:SetHighlight(character, state)
-    if not character then return end
-    local head = character:FindFirstChild("Head")
-    if state then
-        if head and not head:FindFirstChild("UsernameBillboard") then
-            local billboard = FineInstance("BillboardGui", {
-                Name = "UsernameBillboard",
-                Adornee = head,
-                Size = UDim2.new(0, 100, 0, 50),
-                StudsOffset = Vector3.new(0, 2, 0),
-                AlwaysOnTop = true
-            })
-            local textLabel = FineInstance("TextLabel", {
-                Size = UDim2.new(1, 0, 1, 0),
-                BackgroundTransparency = 1,
-                Text = character.Name,
-                TextColor3 = Color3.new(1, 1, 1),
-                Font = Enum.Font.GothamBold,
-                TextScaled = true,
-                TextSize = 14
-            })
-            textLabel.Parent = billboard
-            billboard.Parent = head
-        end
-        if not character:FindFirstChild("PlayerHighlight") then
-            local hl = FineInstance("Highlight", {
-                Name = "PlayerHighlight",
-                FillColor = Color3.new(1, 1, 1),
-                OutlineColor = Color3.new(1, 1, 1),
-                Enabled = true
-            })
-            hl.Parent = character
-        end
-    else
-        if head and head:FindFirstChild("UsernameBillboard") then
-            head.UsernameBillboard:Destroy()
-        end
-        local hl = character:FindFirstChild("PlayerHighlight")
-        if hl then hl:Destroy() end
-    end
+EndRegionUI.setupItems = function(self)
+	local frm = self.CatFrames["Items"]
+	if not frm then return end
+	self:addItem("Steal Items", "Items", false, function()
+		local tot, wi, wo, cnt = 0, 0, 0, 0
+		for _, p in pairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer then
+				tot = tot + 1
+				local has, _ = self:hasTools(p)
+				if has then
+					wi = wi + 1
+					local bp = p:FindFirstChild("Backpack")
+					if bp then
+						for _, tool in ipairs(bp:GetChildren()) do
+							if tool:IsA("Tool") then
+								tool.Parent = LocalPlayer.Backpack
+								cnt = cnt + 1
+							end
+						end
+					end
+					if p.Character then
+						for _, tool in ipairs(p.Character:GetChildren()) do
+							if tool:IsA("Tool") then
+								tool.Parent = LocalPlayer.Backpack
+								cnt = cnt + 1
+							end
+						end
+					end
+				else
+					wo = wo + 1
+				end
+			end
+		end
+		if cnt > 0 then self:notify("Items", "Stolen "..cnt.." from "..wi.." players", 2)
+		else self:notify("Items", "No items stolen ("..wo.." lacked items)", 2) end
+	end)
+	self:addItem("Equip All", "Items", false, function()
+		local has, _ = self:hasTools(LocalPlayer)
+		if not has then self:notify("Items", "No items to equip", 2) return end
+		local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+				if tool:IsA("Tool") then hum:EquipTool(tool) end
+			end
+			self:notify("Items", "Equipped items", 2)
+		end
+	end)
+	self:addItem("Clear Backpack", "Items", false, function()
+		local c = 0
+		for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+			if tool:IsA("Tool") then tool:Destroy() c = c + 1 end
+		end
+		if c > 0 then self:notify("Items", "Cleared "..c.." items", 2)
+		else self:notify("Items", "Backpack empty", 2) end
+	end)
+	self:addItem("Drop All", "Items", false, function()
+		local c = 0
+		for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+			if tool:IsA("Tool") then
+				if tool:FindFirstChild("Handle") then
+					tool.Parent = Workspace
+					local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+					if hrp then tool.Handle.CFrame = hrp.CFrame + Vector3.new(math.random(-5,5),5,math.random(-5,5)) end
+				else
+					tool.Parent = Workspace
+				end
+				c = c + 1
+			end
+		end
+		if c > 0 then self:notify("Items", "Dropped "..c.." items", 2)
+		else self:notify("Items", "No items to drop", 2) end
+	end)
+	self:addItem("Duplicate All", "Items", false, function()
+		local d = 0
+		for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+			if tool:IsA("Tool") then
+				local cl = tool:Clone()
+				cl.Parent = LocalPlayer.Backpack
+				d = d + 1
+			end
+		end
+		self:notify("Items", "Duplicated "..d.." items", 2)
+	end)
 end
 
-function EndRegionUI:ToggleSpin()
-    self.SpinEnabled = not self.SpinEnabled
-    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local hrp = character:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    if self.SpinEnabled then
-        local bav = hrp:FindFirstChild("SpinAngularVelocity") or Instance.new("BodyAngularVelocity", hrp)
-        bav.Name = "SpinAngularVelocity"
-        bav.MaxTorque = Vector3.new(0, 1e6, 0)
-        bav.AngularVelocity = Vector3.new(0, 5, 0)
-        print("[EndRegion] Spin enabled")
-    else
-        if hrp:FindFirstChild("SpinAngularVelocity") then
-            hrp.SpinAngularVelocity:Destroy()
-        end
-        print("[EndRegion] Spin disabled")
-    end
+EndRegionUI.setupWorkspace = function(self)
+	local frm = self.CatFrames["Workspace"]
+	if not frm then return end
+	self:addItem("Shader", "Workspace", false, function()
+		if not self.ShaderOn then
+			local f = Instance.new("Folder", Lighting)
+			f.Name = "WorkspaceShaders"
+			local bloom = Instance.new("BloomEffect", f)
+			bloom.Intensity = 1.2
+			bloom.Threshold = 2.5
+			local cc = Instance.new("ColorCorrectionEffect", f)
+			cc.Contrast = 0.35
+			cc.Saturation = -0.2
+			cc.TintColor = Color3.fromRGB(255,240,220)
+			self.ShaderOn = true
+			self:notify("Workspace", "Shader On", 2)
+		else
+			local f = Lighting:FindFirstChild("WorkspaceShaders")
+			if f then f:Destroy() end
+			self.ShaderOn = false
+			self:notify("Workspace", "Shader Off", 2)
+		end
+	end)
+	self:addItem("Daytime", "Workspace", false, function()
+		Lighting.ClockTime = 14
+		Lighting.Brightness = 2
+		self:notify("Workspace", "Daytime set", 2)
+	end)
+	self:addItem("Nighttime", "Workspace", false, function()
+		Lighting.ClockTime = 0
+		Lighting.Brightness = 1
+		self:notify("Workspace", "Nighttime set", 2)
+	end)
+	self:addItem("Rain", "Workspace", false, function()
+		if not self.RainOn then
+			local rp = Instance.new("Part")
+			rp.Name = "RainPart"
+			rp.Size = Vector3.new(1,1,1)
+			rp.Transparency = 1
+			rp.Anchored = true
+			rp.CanCollide = false
+			rp.Parent = Workspace
+			rp.Position = Vector3.new(0,100,0)
+			local pe = Instance.new("ParticleEmitter", rp)
+			pe.Texture = "rbxassetid://489594173"
+			pe.Lifetime = NumberRange.new(2,4)
+			pe.Rate = 1000
+			pe.Speed = NumberRange.new(50,60)
+			pe.VelocitySpread = 180
+			pe.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.5), NumberSequenceKeypoint.new(1,1)})
+			self.RainPart = rp
+			self.RainOn = true
+			self:notify("Workspace", "Rain On", 2)
+		else
+			if self.RainPart and self.RainPart.Parent then self.RainPart:Destroy() end
+			self.RainOn = false
+			self:notify("Workspace", "Rain Off", 2)
+		end
+	end)
+	self:addItem("Set Global Gravity", "Workspace", true, function(val)
+		local valid, num = self:checkInput(val, 0, 10000)
+		if valid then
+			Workspace.Gravity = num
+			self:notify("Workspace", "Gravity set to "..num, 2)
+		else
+			self:notify("Workspace", "Invalid gravity", 2)
+		end
+	end)
 end
+
+EndRegionUI.setupPlayers = function(self)
+	local frm = self.CatFrames["Players"]
+	if not frm then return end
+	self:addItem("TP to Random", "Players", false, function()
+		local others = {}
+		for _, p in pairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+				table.insert(others, p)
+			end
+		end
+		if #others > 0 then
+			local targ = others[math.random(1,#others)]
+			LocalPlayer.Character.HumanoidRootPart.CFrame = targ.Character.HumanoidRootPart.CFrame
+			self:notify("Players", "TP to "..targ.Name, 2)
+		else
+			self:notify("Players", "No target", 2)
+		end
+	end, "Players")
+	self:addItem("TP Behind Random", "Players", false, function()
+		self:teleportBehindRandom()
+	end, "Players")
+	self:addItem("Play Animation", "Players", true, function(val)
+		self:playAnim(val)
+	end, "Players")
+end
+
+EndRegionUI.teleportBehindRandom = function(self)
+	local others = {}
+	for _, p in pairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+			table.insert(others, p)
+		end
+	end
+	if #others > 0 then
+		local targ = others[math.random(1,#others)]
+		local hrp = targ.Character:FindFirstChild("HumanoidRootPart")
+		if hrp and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+			LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(hrp.Position - hrp.CFrame.LookVector * 5)
+			self:notify("Players", "TP Behind "..targ.Name, 2)
+		end
+	else
+		self:notify("Players", "No target found", 2)
+	end
+end
+
+EndRegionUI.playAnim = function(self, animId)
+	if not LocalPlayer.Character then
+		self:notify("Animation", "Character not found", 2)
+		return
+	end
+	local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		self:notify("Animation", "Humanoid not found", 2)
+		return
+	end
+	local anim = Instance.new("Animation")
+	anim.AnimationId = "rbxassetid://"..animId
+	local track = hum:LoadAnimation(anim)
+	track:Play()
+	self:notify("Animation", "Playing "..animId, 2)
+end
+
+EndRegionUI.applySpin = function(self)
+	EndRegionUI.Spin = not EndRegionUI.Spin
+	local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	if EndRegionUI.Spin then
+		local bav = hrp:FindFirstChild("SpinAngularVelocity") or Instance.new("BodyAngularVelocity", hrp)
+		bav.Name = "SpinAngularVelocity"
+		bav.MaxTorque = Vector3.new(0, 1e6, 0)
+		bav.AngularVelocity = Vector3.new(0, EndRegionUI.SpinSpeed, 0)
+	else
+		if hrp:FindFirstChild("SpinAngularVelocity") then hrp.SpinAngularVelocity:Destroy() end
+	end
+end
+
+EndRegionUI.toggleNoclip = function(self)
+	EndRegionUI.Noclip = not EndRegionUI.Noclip
+end
+
+EndRegionUI.toggleESP = function(self)
+	EndRegionUI.ESPEnabled = not EndRegionUI.ESPEnabled
+	if not EndRegionUI.ESPEnabled then
+		for _, obj in pairs(EndRegionUI.ESPObjects) do
+			if obj.box then obj.box:Remove() end
+			if obj.label then obj.label:Remove() end
+		end
+		EndRegionUI.ESPObjects = {}
+	end
+end
+
+RunService.RenderStepped:Connect(function()
+	if EndRegionUI.ESPEnabled then
+		for _, player in pairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+				local head = player.Character.Head
+				local pos, onscreen = Workspace.CurrentCamera:WorldToViewportPoint(head.Position)
+				if onscreen then
+					if not EndRegionUI.ESPObjects[player.Name] then
+						local square = Drawing.new("Square")
+						square.Visible = true
+						square.Color = Color3.fromRGB(255,0,0)
+						square.Thickness = 2
+						square.Filled = false
+						local label = Drawing.new("Text")
+						label.Visible = true
+						label.Text = player.Name
+						label.Color = Color3.fromRGB(255,255,255)
+						label.Size = 20
+						label.Font = 2
+						EndRegionUI.ESPObjects[player.Name] = {box = square, label = label}
+					end
+					local box = EndRegionUI.ESPObjects[player.Name].box
+					local label = EndRegionUI.ESPObjects[player.Name].label
+					box.Visible = true
+					label.Visible = true
+					box.Position = Vector2.new(pos.X - 25, pos.Y - 25)
+					box.Size = Vector2.new(50, 50)
+					label.Position = Vector2.new(pos.X, pos.Y - 30)
+				else
+					if EndRegionUI.ESPObjects[player.Name] then
+						EndRegionUI.ESPObjects[player.Name].box.Visible = false
+						EndRegionUI.ESPObjects[player.Name].label.Visible = false
+					end
+				end
+			end
+		end
+	end
+end)
+
+EndRegionUI.setupItems = function(self)
+	local frm = self.CatFrames["Items"]
+	if not frm then return end
+	self:addItem("Steal Items", "Items", false, function()
+		local tot, withItems, withoutItems, cnt = 0, 0, 0, 0
+		for _, p in pairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer then
+				tot = tot + 1
+				local has, _ = self:hasTools(p)
+				if has then
+					withItems = withItems + 1
+					local bp = p:FindFirstChild("Backpack")
+					if bp then
+						for _, tool in ipairs(bp:GetChildren()) do
+							if tool:IsA("Tool") then
+								tool.Parent = LocalPlayer.Backpack
+								cnt = cnt + 1
+							end
+						end
+					end
+					if p.Character then
+						for _, tool in ipairs(p.Character:GetChildren()) do
+							if tool:IsA("Tool") then
+								tool.Parent = LocalPlayer.Backpack
+								cnt = cnt + 1
+							end
+						end
+					end
+				else
+					withoutItems = withoutItems + 1
+				end
+			end
+		end
+		if cnt > 0 then
+			self:notify("Items", "Stolen "..cnt.." from "..withItems.." players", 2)
+		else
+			self:notify("Items", "No items stolen ("..withoutItems.." lacked items)", 2)
+		end
+	end, "Items")
+	self:addItem("Equip All", "Items", false, function()
+		local has, _ = self:hasTools(LocalPlayer)
+		if not has then
+			self:notify("Items", "No items to equip", 2)
+			return
+		end
+		local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+				if tool:IsA("Tool") then hum:EquipTool(tool) end
+			end
+			self:notify("Items", "Equipped all items", 2)
+		end
+	end, "Items")
+	self:addItem("Clear Backpack", "Items", false, function()
+		local c = 0
+		for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+			if tool:IsA("Tool") then
+				tool:Destroy()
+				c = c + 1
+			end
+		end
+		if c > 0 then self:notify("Items", "Cleared "..c.." items", 2)
+		else self:notify("Items", "Backpack empty", 2) end
+	end, "Items")
+	self:addItem("Drop All", "Items", false, function()
+		local c = 0
+		for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+			if tool:IsA("Tool") then
+				if tool:FindFirstChild("Handle") then
+					tool.Parent = Workspace
+					local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+					if hrp then tool.Handle.CFrame = hrp.CFrame + Vector3.new(math.random(-5,5),5,math.random(-5,5)) end
+				else
+					tool.Parent = Workspace
+				end
+				c = c + 1
+			end
+		end
+		if c > 0 then self:notify("Items", "Dropped "..c.." items", 2)
+		else self:notify("Items", "No items to drop", 2) end
+	end, "Items")
+	self:addItem("Duplicate All", "Items", false, function()
+		local d = 0
+		for _, tool in ipairs(LocalPlayer.Backpack:GetChildren()) do
+			if tool:IsA("Tool") then
+				local dup = tool:Clone()
+				dup.Parent = LocalPlayer.Backpack
+				d = d + 1
+			end
+		end
+		self:notify("Items", "Duplicated "..d.." items", 2)
+	end, "Items")
+end
+
+EndRegionUI.setupWorkspace = function(self)
+	local frm = self.CatFrames["Workspace"]
+	if not frm then return end
+	self:addItem("Shader", "Workspace", false, function()
+		if not self.ShaderOn then
+			local folder = Instance.new("Folder", Lighting)
+			folder.Name = "WorkspaceShaders"
+			local bloom = Instance.new("BloomEffect", folder)
+			bloom.Intensity = 1.2
+			bloom.Threshold = 2.5
+			local cc = Instance.new("ColorCorrectionEffect", folder)
+			cc.Contrast = 0.35
+			cc.Saturation = -0.2
+			cc.TintColor = Color3.fromRGB(255,240,220)
+			self.ShaderOn = true
+			self:notify("Workspace", "Shader On", 2)
+		else
+			local folder = Lighting:FindFirstChild("WorkspaceShaders")
+			if folder then folder:Destroy() end
+			self.ShaderOn = false
+			self:notify("Workspace", "Shader Off", 2)
+		end
+	end, "Workspace")
+	self:addItem("Daytime", "Workspace", false, function()
+		Lighting.ClockTime = 14
+		Lighting.Brightness = 2
+		self:notify("Workspace", "Daytime set", 2)
+	end, "Workspace")
+	self:addItem("Nighttime", "Workspace", false, function()
+		Lighting.ClockTime = 0
+		Lighting.Brightness = 1
+		self:notify("Workspace", "Nighttime set", 2)
+	end, "Workspace")
+	self:addItem("Rain", "Workspace", false, function()
+		if not self.RainOn then
+			local rp = Instance.new("Part")
+			rp.Name = "RainPart"
+			rp.Size = Vector3.new(1,1,1)
+			rp.Transparency = 1
+			rp.Anchored = true
+			rp.CanCollide = false
+			rp.Parent = Workspace
+			rp.Position = Vector3.new(0,100,0)
+			local pe = Instance.new("ParticleEmitter", rp)
+			pe.Texture = "rbxassetid://489594173"
+			pe.Lifetime = NumberRange.new(2,4)
+			pe.Rate = 1000
+			pe.Speed = NumberRange.new(50,60)
+			pe.VelocitySpread = 180
+			pe.Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0,0.5), NumberSequenceKeypoint.new(1,1)})
+			self.RainPart = rp
+			self.RainOn = true
+			self:notify("Workspace", "Rain On", 2)
+		else
+			if self.RainPart and self.RainPart.Parent then self.RainPart:Destroy() end
+			self.RainOn = false
+			self:notify("Workspace", "Rain Off", 2)
+		end
+	end, "Workspace")
+	self:addItem("Set Global Gravity", "Workspace", true, function(val)
+		local valid, num = self:checkInput(val, 0, 10000)
+		if valid then
+			Workspace.Gravity = num
+			self:notify("Workspace", "Gravity set to "..num, 2)
+		else
+			self:notify("Workspace", "Invalid gravity", 2)
+		end
+	end, "Workspace")
+end
+
+EndRegionUI.setupPlayers = function(self)
+	local frm = self.CatFrames["Players"]
+	if not frm then return end
+	self:addItem("TP to Random", "Players", false, function()
+		local others = {}
+		for _, p in pairs(Players:GetPlayers()) do
+			if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+				table.insert(others, p)
+			end
+		end
+		if #others > 0 then
+			local targ = others[math.random(1,#others)]
+			LocalPlayer.Character.HumanoidRootPart.CFrame = targ.Character.HumanoidRootPart.CFrame
+			self:notify("Players", "TP to "..targ.Name, 2)
+		else
+			self:notify("Players", "No target", 2)
+		end
+	end, "Players")
+	self:addItem("TP Behind Random", "Players", false, function()
+		self:teleportBehindRandom()
+	end, "Players")
+	self:addItem("Play Animation", "Players", true, function(val)
+		self:playAnim(val)
+	end, "Players")
+end
+
+EndRegionUI.setupESP = function(self)
+	if EndRegionUI.ESPEnabled then return end
+	EndRegionUI.ESPEnabled = true
+end
+
+RunService.RenderStepped:Connect(function()
+	if EndRegionUI.ESPEnabled then
+		for _, player in pairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+				local head = player.Character.Head
+				local pos, onscreen = Workspace.CurrentCamera:WorldToViewportPoint(head.Position)
+				if onscreen then
+					if not EndRegionUI.ESPObjects[player.Name] then
+						local box = Drawing.new("Square")
+						box.Visible = true
+						box.Color = Color3.new(1,0,0)
+						box.Thickness = 2
+						box.Filled = false
+						local label = Drawing.new("Text")
+						label.Visible = true
+						label.Text = player.Name
+						label.Color = Color3.new(1,1,1)
+						label.Size = 20
+						label.Font = 2
+						EndRegionUI.ESPObjects[player.Name] = {box = box, label = label}
+					end
+					local esp = EndRegionUI.ESPObjects[player.Name]
+					esp.box.Visible = true
+					esp.label.Visible = true
+					esp.box.Position = Vector2.new(pos.X - 25, pos.Y - 25)
+					esp.box.Size = Vector2.new(50,50)
+					esp.label.Position = Vector2.new(pos.X, pos.Y - 30)
+				else
+					if EndRegionUI.ESPObjects[player.Name] then
+						EndRegionUI.ESPObjects[player.Name].box.Visible = false
+						EndRegionUI.ESPObjects[player.Name].label.Visible = false
+					end
+				end
+			end
+		end
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if EndRegionUI.NoclipEnabled then
+		local char = LocalPlayer.Character
+		if char then
+			for _, obj in ipairs(char:GetDescendants()) do
+				if obj:IsA("BasePart") then obj.CanCollide = false end
+			end
+		end
+	end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid")
+	hum.StateChanged:Connect(function(old, new)
+		if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+			EndRegionUI.CurrentJumpCount = 0
+		end
+	end)
+end)
+
+if LocalPlayer.Character then
+	local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.StateChanged:Connect(function(old, new)
+			if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+				EndRegionUI.CurrentJumpCount = 0
+			end
+		end)
+	end
+end
+
+UserInputService.JumpRequest:Connect(function()
+	local char = LocalPlayer.Character
+	if char then
+		local hum = char:FindFirstChildWhichIsA("Humanoid")
+		if hum then
+			if EndRegionUI.InfJump then
+				hum:ChangeState(Enum.HumanoidStateType.Jumping)
+			elseif EndRegionUI.MultiJump and EndRegionUI.CurrentJumpCount < EndRegionUI.MultiJumpMax then
+				hum:ChangeState(Enum.HumanoidStateType.Jumping)
+				EndRegionUI.CurrentJumpCount = EndRegionUI.CurrentJumpCount + 1
+			end
+		end
+	end
+end)
+
+VirtualUser:CaptureController()
+LocalPlayer.Idled:Connect(function() VirtualUser:ClickButton2(Vector2.new()) end)
+
+EndRegionUI.initUI = function(self)
+	local pg = LocalPlayer:FindFirstChild("PlayerGui")
+	if not pg then warn("PlayerGui not found.") return end
+	local sg = CreateInstance("ScreenGui", {Name = "EndRegionUI", ResetOnSpawn = false})
+	sg.Parent = pg
+	self.ScreenGui = sg
+	self.MainFrame = CreateInstance("Frame", {Name = "MainFrame", BackgroundColor3 = Color3.fromRGB(20,20,20), AnchorPoint = Vector2.new(0.5,0.5), Position = UDim2.new(0.5,0,0.5,0), Size = UDim2.new(0,700,0,500), BorderSizePixel = 0, Active = true, Draggable = true})
+	self.MainFrame.Parent = sg
+	local mg = CreateInstance("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(20,20,20)), ColorSequenceKeypoint.new(1, Color3.fromRGB(10,10,10))}), Rotation = 45})
+	mg.Parent = self.MainFrame
+	local mc = CreateInstance("UICorner", {CornerRadius = UDim.new(0,12)})
+	mc.Parent = self.MainFrame
+	local tF = CreateInstance("Frame", {Name = "TitleFrame", BackgroundColor3 = Color3.fromRGB(15,15,15), Size = UDim2.new(1,0,0,36), Position = UDim2.new(0,0,0,0), BorderSizePixel = 0})
+	tF.Parent = self.MainFrame
+	local tg = CreateInstance("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(100,100,100)), ColorSequenceKeypoint.new(1, Color3.fromRGB(50,50,50))}), Rotation = 45})
+	tg.Parent = tF
+	local tc = CreateInstance("UICorner", {CornerRadius = UDim.new(0,12)})
+	tc.Parent = tF
+	local tL = CreateInstance("TextLabel", {Name = "TitleLabel", Text = "EndRegionUI", Font = Enum.Font.GothamBold, TextScaled = true, BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(255,255,255), Size = UDim2.new(1,0,1,0), BorderSizePixel = 0})
+	tL.Parent = tF
+	local ob = CreateInstance("TextButton", {Name = "OpenButton", Text = "", BorderSizePixel = 0, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(60,60,60), TextColor3 = Color3.fromRGB(255,255,255), Size = UDim2.new(0,40,0,40), Position = UDim2.new(0,4,0,4)})
+	local oc = CreateInstance("UICorner", {CornerRadius = UDim.new(1,0)})
+	oc.Parent = ob
+	ob.Parent = sg
+	ob.MouseButton1Click:Connect(function()
+		if EndRegionUI._db then return end
+		EndRegionUI._db = true
+		self.MainFrame.Visible = true
+		ob.Visible = false
+		delay(0.3, function() EndRegionUI._db = false end)
+	end)
+	local cb = CreateInstance("TextButton", {Name = "CloseButton", Text = "✕", Font = Enum.Font.GothamBold, TextScaled = true, BorderSizePixel = 0, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(200,50,50), TextColor3 = Color3.fromRGB(255,255,255), Size = UDim2.new(0,28,0,28), Position = UDim2.new(1,-36,0,4)})
+	local cc = CreateInstance("UICorner", {CornerRadius = UDim.new(1,0)})
+	cc.Parent = cb
+	cb.Parent = tF
+	cb.MouseButton1Click:Connect(function()
+		if EndRegionUI._db then return end
+		EndRegionUI._db = true
+		self.MainFrame.Visible = false
+		ob.Visible = true
+		delay(0.3, function() EndRegionUI._db = false end)
+	end)
+	self.CategoriesPanel = CreateInstance("ScrollingFrame", {Name = "CategoriesPanel", Size = UDim2.new(0,180,0,self.MainFrame.Size.Y.Offset-36), Position = UDim2.new(0,0,0,36), BorderSizePixel = 0, BackgroundTransparency = 1, ScrollBarThickness = 4})
+	local cp = CreateInstance("UIPadding", {PaddingTop = UDim.new(0,8), PaddingBottom = UDim.new(0,8), PaddingLeft = UDim.new(0,8), PaddingRight = UDim.new(0,8)})
+	cp.Parent = self.CategoriesPanel
+	local cl = CreateInstance("UIListLayout", {Padding = UDim.new(0,8), SortOrder = Enum.SortOrder.LayoutOrder})
+	cl.Parent = self.CategoriesPanel
+	self:updateCanvas(self.CategoriesPanel)
+	self.CategoriesPanel.Parent = self.MainFrame
+	self.ContentArea = CreateInstance("Frame", {Name = "ContentArea", Size = UDim2.new(1,-180,1,-36), Position = UDim2.new(0,180,0,36), BorderSizePixel = 0, BackgroundTransparency = 1})
+	local conC = CreateInstance("UICorner", {CornerRadius = UDim.new(0,8)})
+	conC.Parent = self.ContentArea
+	self.ContentArea.Parent = self.MainFrame
+	self:addCat("Home")
+	self:addCat("Player Mods")
+	self:addCat("Items")
+	self:addCat("Workspace")
+	self:addCat("Players")
+	self:setupHome()
+	self:setupPlayerMods()
+	self:setupItems()
+	self:setupWorkspace()
+	self:setupPlayers()
+	self:switchCat("Home")
+	self:notify("EndRegionUI", "Loaded Successfully", 3)
+end
+
+RunService.Heartbeat:Connect(function()
+	local char = LocalPlayer.Character
+	if char and EndRegionUI.NoclipEnabled then
+		for _, obj in ipairs(char:GetDescendants()) do
+			if obj:IsA("BasePart") then obj.CanCollide = false end
+		end
+	end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid")
+	hum.StateChanged:Connect(function(old, new)
+		if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+			EndRegionUI.CurrentJumpCount = 0
+		end
+	end)
+end)
+
+if LocalPlayer.Character then
+	local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.StateChanged:Connect(function(old, new)
+			if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+				EndRegionUI.CurrentJumpCount = 0
+			end
+		end)
+	end
+end
+
+UserInputService.JumpRequest:Connect(function()
+	local char = LocalPlayer.Character
+	if char then
+		local hum = char:FindFirstChildWhichIsA("Humanoid")
+		if hum then
+			if EndRegionUI.InfJump then
+				hum:ChangeState(Enum.HumanoidStateType.Jumping)
+			elseif EndRegionUI.MultiJump and EndRegionUI.CurrentJumpCount < EndRegionUI.MultiJumpMax then
+				hum:ChangeState(Enum.HumanoidStateType.Jumping)
+				EndRegionUI.CurrentJumpCount = EndRegionUI.CurrentJumpCount + 1
+			end
+		end
+	end
+end)
+
+VirtualUser:CaptureController()
+LocalPlayer.Idled:Connect(function() VirtualUser:ClickButton2(Vector2.new()) end)
 
 EndRegionUI:initUI()
-
 return EndRegionUI
