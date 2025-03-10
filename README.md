@@ -1,5 +1,2 @@
-#EndRegionUi!
-   Check new updates.
-   Gradient, cornerUi style ui.
- 
-   random stuff :V
+My Roblox script,
+new stuff. super random lel
