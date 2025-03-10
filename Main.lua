@@ -313,7 +313,7 @@ function EndRegionUI:setupHome()
 	addInfo("Username: " .. localPlayer.Name)
 	addInfo("Display: " .. (localPlayer.DisplayName or "N/A"))
 	addInfo("ID: " .. tostring(localPlayer.UserId))
-	addInfo("Premium: " .. (localPlayer.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"))
+	addInfo("Has Roblox Premium: " .. (localPlayer.MembershipType == Enum.MembershipType.Premium and "Yes" or "No"))
 end
 
 function EndRegionUI:setupLocal()
