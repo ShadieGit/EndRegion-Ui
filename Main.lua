@@ -1,18 +1,13 @@
--- UPDATE 3.0
--- UPDATE 3.1
-
--- SERVICES
-local Players          = game:GetService("Players")
-local TweenService     = game:GetService("TweenService")
-local StarterGui       = game:GetService("StarterGui")
-local RunService       = game:GetService("RunService")
-local Workspace        = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
-local Lighting         = game:GetService("Lighting")
-local TeleportService  = game:GetService("TeleportService")
-local VirtualUser      = game:GetService("VirtualUser")
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
+local VirtualUser = game:GetService("VirtualUser")
 
--- Use game:HttpGet for updates (works in a local script)
 local function httpGet(url)
     local success, result = pcall(function() return game:HttpGet(url) end)
     return success and result or nil
@@ -21,7 +16,6 @@ end
 local localPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
 assert(localPlayer, "LocalPlayer not found!")
 
--- Utility for safe object creation
 local function createObject(className, properties)
     local obj = Instance.new(className)
     if properties then
@@ -33,26 +27,29 @@ local function createObject(className, properties)
 end
 
 local ShadieUI = {}
-ShadieUI.version             = "3.1"
-ShadieUI.errorLog            = {}
-ShadieUI.espObjects          = {}
-ShadieUI.highlightObjects      = {}
-ShadieUI.categoryButtons     = {}
-ShadieUI.categoryFrames      = {}
-ShadieUI.categoryCounters    = {}
-ShadieUI.highlightsActive    = false
-ShadieUI.espEnabled          = false
-ShadieUI.spinEnabled         = false
-ShadieUI.noclipEnabled       = false
-ShadieUI.floatEnabled        = false
-ShadieUI.bunnyHopEnabled     = false
+ShadieUI.version = "3.1"
+ShadieUI.localSignature = "SUI_SIGNATURE:3.1_Live"
+ShadieUI.errorLog = {}
+ShadieUI.espObjects = {}
+ShadieUI.highlightObjects = {}
+ShadieUI.categoryButtons = {}
+ShadieUI.categoryFrames = {}
+ShadieUI.categoryCounters = {}
+ShadieUI.highlightsActive = false
+ShadieUI.espEnabled = false
+ShadieUI.spinEnabled = false
+ShadieUI.noclipEnabled = false
+ShadieUI.floatEnabled = false
+ShadieUI.bunnyHopEnabled = false
 ShadieUI.infinityJumpEnabled = false
-ShadieUI.spinSpeed           = 5
+ShadieUI.spinSpeed = 5
 ShadieUI.dayNightCycleActive = false
-ShadieUI.dayNightConnection  = nil
-ShadieUI.debounceBusy        = false
-ShadieUI.updateAvailable     = false
-ShadieUI.currentJumpCount    = 0
+ShadieUI.dayNightConnection = nil
+ShadieUI.debounceBusy = false
+ShadieUI.updateAvailable = false
+ShadieUI.updateApplied = false
+ShadieUI.updatePromptShown = false
+ShadieUI.currentJumpCount = 0
 
 function ShadieUI:logError(msg)
     table.insert(self.errorLog, {time = os.time(), error = msg})
@@ -60,11 +57,9 @@ function ShadieUI:logError(msg)
 end
 
 function ShadieUI:notify(title, text, duration)
-    title    = title or "ShadieUI"
+    title = title or "ShadieUI"
     duration = duration or 2
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = duration})
-    end)
+    pcall(function() StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = duration}) end)
     print("[" .. title .. "] " .. text)
 end
 
@@ -76,25 +71,24 @@ function ShadieUI:checkInput(value, minValue, maxValue)
     return false, num
 end
 
--- Create category button and container
 function ShadieUI:createCategory(name)
     assert(type(name) == "string" and name ~= "", "Invalid category name!")
     local btn = createObject("TextButton", {
-        Name = name .. "Btn",
-        Text = name,
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Name = name .. "Btn", 
+        Text = name, 
+        Size = UDim2.new(1, 0, 0, 40), 
+        BackgroundTransparency = 0, 
+        BackgroundColor3 = Color3.fromRGB(60,60,60), 
+        Font = Enum.Font.GothamBold, 
+        TextScaled = true, 
+        TextColor3 = Color3.fromRGB(255,255,255), 
         BorderSizePixel = 0
     })
     local grad = createObject("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(75, 0, 130))
-        }),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(138,43,226)), 
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(75,0,130))
+        }), 
         Rotation = 90
     })
     grad.Parent = btn
@@ -102,13 +96,12 @@ function ShadieUI:createCategory(name)
     self.categoryButtons[name] = btn
     self.categoryCounters[name] = 0
     btn.MouseButton1Click:Connect(function() self:switchCategory(name) end)
-    
     local frame = createObject("ScrollingFrame", {
-        Name = name .. "Frame",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 4,
+        Name = name .. "Frame", 
+        Size = UDim2.new(1, 0, 1, 0), 
+        BackgroundTransparency = 1, 
+        BorderSizePixel = 0, 
+        ScrollBarThickness = 4, 
         ScrollingEnabled = true
     })
     local layout = createObject("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder})
@@ -118,63 +111,58 @@ function ShadieUI:createCategory(name)
     frame.Visible = false
 end
 
--- Create an item (button with optional input)
 function ShadieUI:createItem(name, category, hasInput, callback)
     assert(type(name) == "string" and name ~= "", "Invalid item name")
     assert(type(category) == "string" and category ~= "", "Invalid category")
     assert(type(hasInput) == "boolean", "hasInput must be boolean")
     assert(type(callback) == "function", "Callback must be a function")
-    
     local parent = self.categoryFrames[category]
     if not parent then
         self:notify("Error", "Category '" .. category .. "' missing", 2)
         return
     end
-    
     local container = createObject("Frame", {
-        Name = name .. "Container",
-        Size = UDim2.new(1, 0, 0, 40),
-        BackgroundTransparency = 1,
+        Name = name .. "Container", 
+        Size = UDim2.new(1, 0, 0, 40), 
+        BackgroundTransparency = 1, 
         BorderSizePixel = 0
     })
     container.LayoutOrder = self.categoryCounters[category] or 0
     self.categoryCounters[category] = self.categoryCounters[category] + 1
     container.Parent = parent
-    
     local btn = createObject("TextButton", {
-        Name = name .. "Button",
-        Text = name,
-        Size = UDim2.new(0, 140, 1, 0),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = Color3.fromRGB(80, 80, 80),
-        Font = Enum.Font.Gotham,
-        TextScaled = true,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Name = name .. "Button", 
+        Text = name, 
+        Size = UDim2.new(0, 140, 1, 0), 
+        BackgroundTransparency = 0, 
+        BackgroundColor3 = Color3.fromRGB(80,80,80), 
+        Font = Enum.Font.Gotham, 
+        TextScaled = true, 
+        TextColor3 = Color3.fromRGB(255,255,255), 
         BorderSizePixel = 0
     })
     local grad = createObject("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(75, 0, 130))
-        }),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(138,43,226)), 
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(75,0,130))
+        }), 
         Rotation = 90
     })
     grad.Parent = btn
     btn.Parent = container
-    
     if hasInput then
         local input = createObject("TextBox", {
-            Name = name .. "Input",
-            Text = "",
-            PlaceholderText = "Enter value",
-            PlaceholderColor3 = Color3.fromRGB(150, 150, 150),
-            Size = UDim2.new(0, 120, 1, 0),
-            Position = UDim2.new(0, 150, 0, 0),
-            BackgroundTransparency = 0,
-            BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-            Font = Enum.Font.Gotham,
-            TextScaled = true,
-            TextColor3 = Color3.fromRGB(240, 240, 240),
+            Name = name .. "Input", 
+            Text = "", 
+            PlaceholderText = "Enter value", 
+            PlaceholderColor3 = Color3.fromRGB(150,150,150), 
+            Size = UDim2.new(0, 120, 1, 0), 
+            Position = UDim2.new(0, 150, 0, 0), 
+            BackgroundTransparency = 0, 
+            BackgroundColor3 = Color3.fromRGB(60,60,60), 
+            Font = Enum.Font.Gotham, 
+            TextScaled = true, 
+            TextColor3 = Color3.fromRGB(240,240,240), 
             BorderSizePixel = 0
         })
         input.Parent = container
@@ -196,116 +184,112 @@ function ShadieUI:initializeUI()
     local sg = createObject("ScreenGui", {Name = "ShadieUI_Main", ResetOnSpawn = false})
     sg.Parent = pg
     self.screenGui = sg
-
     local mainFrame = createObject("Frame", {
-        Name = "MainFrame",
-        Size = UDim2.new(0, 700, 0, 400),
-        Position = UDim2.new(0.5, -350, 0.5, -200),
-        BackgroundTransparency = 0.3,
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BorderSizePixel = 0,
-        Active = true,
+        Name = "MainFrame", 
+        Size = UDim2.new(0,700,0,400), 
+        Position = UDim2.new(0.5,-350,0.5,-200), 
+        BackgroundTransparency = 0.3, 
+        BackgroundColor3 = Color3.fromRGB(0,0,0), 
+        BorderSizePixel = 0, 
+        Active = true, 
         Draggable = true
     })
     mainFrame.Parent = sg
     self.mainFrame = mainFrame
     local mainGrad = createObject("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(75, 0, 130))
-        }),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(138,43,226)), 
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(75,0,130))
+        }), 
         Rotation = 45
     })
     mainGrad.Parent = mainFrame
-
     local titleFrame = createObject("Frame", {
-        Name = "TitleFrame",
-        Size = UDim2.new(1, 0, 0, 36),
-        Position = UDim2.new(0, 0, 0, 0),
-        BackgroundColor3 = Color3.fromRGB(20, 20, 20),
+        Name = "TitleFrame", 
+        Size = UDim2.new(1,0,0,36), 
+        Position = UDim2.new(0,0,0,0), 
+        BackgroundColor3 = Color3.fromRGB(20,20,20), 
         BorderSizePixel = 0
     })
     titleFrame.Parent = mainFrame
     local titleLabel = createObject("TextLabel", {
-        Name = "TitleLabel",
-        Text = "ShadieUI",
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundTransparency = 1,
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
+        Name = "TitleLabel", 
+        Text = "ShadieUI", 
+        Size = UDim2.new(1,0,1,0), 
+        BackgroundTransparency = 1, 
+        Font = Enum.Font.GothamBold, 
+        TextScaled = true, 
+        TextColor3 = Color3.fromRGB(255,255,255), 
         BorderSizePixel = 0
     })
     local titleGrad = createObject("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(75, 0, 130))
-        }),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(138,43,226)), 
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(75,0,130))
+        }), 
         Rotation = 45
     })
     titleGrad.Parent = titleLabel
     titleLabel.Parent = titleFrame
-
-    -- Remove Close button entirely; add a circular Open (toggle) button.
     local toggleBtn = createObject("TextButton", {
-        Name = "ToggleButton",
-        Text = "O",
-        Size = UDim2.new(0, 50, 0, 50),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = Color3.fromRGB(60, 60, 60),
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 10, 0, 10)
+        Name = "ToggleButton", 
+        Text = "O", 
+        Size = UDim2.new(0,50,0,50), 
+        BackgroundTransparency = 0, 
+        BackgroundColor3 = Color3.fromRGB(60,60,60), 
+        Font = Enum.Font.GothamBold, 
+        TextScaled = true, 
+        TextColor3 = Color3.fromRGB(255,255,255), 
+        BorderSizePixel = 0, 
+        Position = UDim2.new(0,10,0,10)
     })
     local toggleGrad = createObject("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(75, 0, 130))
-        }),
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(138,43,226)), 
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(75,0,130))
+        }), 
         Rotation = 45
     })
     toggleGrad.Parent = toggleBtn
-    local roundCorner = createObject("UICorner", {CornerRadius = UDim.new(1, 0)})
+    local roundCorner = createObject("UICorner", {CornerRadius = UDim.new(1,0)})
     roundCorner.Parent = toggleBtn
     toggleBtn.Parent = sg
-    -- Toggling: when clicked, show/hide main UI.
     toggleBtn.MouseButton1Click:Connect(function()
         self.mainFrame.Visible = not self.mainFrame.Visible
+        if self.mainFrame.Visible then
+            self:playOpeningAnim()
+        end
     end)
-
     local categoriesPanel = createObject("ScrollingFrame", {
-        Name = "CategoriesPanel",
-        Size = UDim2.new(0, 180, 0, mainFrame.Size.Y.Offset - 36),
-        Position = UDim2.new(0, 0, 0, 36),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ScrollBarThickness = 4,
+        Name = "CategoriesPanel", 
+        Size = UDim2.new(0,180,0,mainFrame.Size.Y.Offset - 36), 
+        Position = UDim2.new(0,0,0,36), 
+        BackgroundTransparency = 1, 
+        BorderSizePixel = 0, 
+        ScrollBarThickness = 4, 
         ScrollingEnabled = true
     })
-    local cp = createObject("UIPadding", {PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8)})
+    local cp = createObject("UIPadding", {PaddingTop = UDim.new(0,8), PaddingBottom = UDim.new(0,8), PaddingLeft = UDim.new(0,8), PaddingRight = UDim.new(0,8)})
     cp.Parent = categoriesPanel
-    local clayout = createObject("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder})
+    local clayout = createObject("UIListLayout", {Padding = UDim.new(0,8), SortOrder = Enum.SortOrder.LayoutOrder})
     clayout.Parent = categoriesPanel
     categoriesPanel.Parent = mainFrame
     self.categoriesPanel = categoriesPanel
-
     local contentArea = createObject("Frame", {
-        Name = "ContentArea",
-        Size = UDim2.new(1, -180, 1, -36),
-        Position = UDim2.new(0, 180, 0, 36),
-        BackgroundTransparency = 1,
+        Name = "ContentArea", 
+        Size = UDim2.new(1,-180,1,-36), 
+        Position = UDim2.new(0,180,0,36), 
+        BackgroundTransparency = 1, 
         BorderSizePixel = 0
     })
-    local conCrn = createObject("UICorner", {CornerRadius = UDim.new(0, 8)})
+    local conCrn = createObject("UICorner", {CornerRadius = UDim.new(0,8)})
     conCrn.Parent = contentArea
     contentArea.Parent = mainFrame
     self.contentArea = contentArea
 end
 
 function ShadieUI:initializeCategories()
-    local cats = {"Home", "Local", "Player", "Workspace", "Backpack", "Advanced"}
+    local cats = {"Home","Local","Player","Workspace","Backpack","Advanced"}
     for _, cat in ipairs(cats) do
         self:createCategory(cat)
     end
@@ -322,81 +306,56 @@ function ShadieUI:switchCategory(name)
     end
 end
 
+function ShadieUI:SetTitle(newTitle)
+    assert(type(newTitle) == "string" and newTitle ~= "", "Invalid title!")
+    local titleFrame = self.mainFrame and self.mainFrame:FindFirstChild("TitleFrame")
+    if titleFrame then
+        local titleLabel = titleFrame:FindFirstChild("TitleLabel")
+        if titleLabel then
+            titleLabel.Text = newTitle
+        end
+    end
+end
+
+function ShadieUI:playOpeningAnim()
+    local frame = self.mainFrame
+    if not frame then return end
+    frame.Size = UDim2.new(0,350,0,200)
+    frame.BackgroundTransparency = 1
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(frame, tweenInfo, {Size = UDim2.new(0,700,0,400), BackgroundTransparency = 0.3})
+    tween:Play()
+end
+
 function ShadieUI:setupHome()
     local frame = self.categoryFrames["Home"]
     if not frame then return end
-    local card = createObject("Frame", {
-        Name = "ProfileCard",
-        Size = UDim2.new(1, -16, 0, 250),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = Color3.fromRGB(30,30,30),
-        BorderSizePixel = 0
-    })
-    local grad = createObject("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(50,50,70)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(20,20,40))
-        }),
-        Rotation = 45
-    })
+    local card = createObject("Frame", {Name = "ProfileCard", Size = UDim2.new(1,-16,0,250), BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(30,30,30), BorderSizePixel = 0})
+    local grad = createObject("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(50,50,70)), ColorSequenceKeypoint.new(1, Color3.fromRGB(20,20,40))}), Rotation = 45})
     grad.Parent = card
     local crn = createObject("UICorner", {CornerRadius = UDim.new(0,12)})
     crn.Parent = card
     card.Parent = frame
-
-    local pic = createObject("ImageLabel", {
-        Name = "ProfilePic",
-        Size = UDim2.new(0,80,0,80),
-        Position = UDim2.new(0,10,0,10),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = Color3.fromRGB(20,20,20),
-        BorderSizePixel = 0,
-        Image = ""
-    })
-    local picCrn = createObject("UICorner", {CornerRadius = UDim.new(1, 0)})
+    local pic = createObject("ImageLabel", {Name = "ProfilePic", Size = UDim2.new(0,80,0,80), Position = UDim2.new(0,10,0,10), BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(20,20,20), BorderSizePixel = 0, Image = ""})
+    local picCrn = createObject("UICorner", {CornerRadius = UDim.new(1,0)})
     picCrn.Parent = pic
     pic.Parent = card
-    local ok, thumb = pcall(function()
-        return Players:GetUserThumbnailAsync(localPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
-    end)
+    local ok, thumb = pcall(function() return Players:GetUserThumbnailAsync(localPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100) end)
     if ok and thumb then
         pic.Image = thumb
     else
         pic.Image = "rbxassetid://1"
     end
-
-    local info = createObject("Frame", {
-        Name = "InfoFrame",
-        Size = UDim2.new(1, -100, 1, 0),
-        Position = UDim2.new(0, 100, 0, 10),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0
-    })
+    local info = createObject("Frame", {Name = "InfoFrame", Size = UDim2.new(1,-100,1,0), Position = UDim2.new(0,100,0,10), BackgroundTransparency = 1, BorderSizePixel = 0})
     info.Parent = card
     local list = createObject("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0,4)})
     list.Parent = info
-
     local function addInfo(text)
-        local lbl = createObject("TextLabel", {
-            Text = text,
-            Font = Enum.Font.Gotham,
-            TextScaled = true,
-            BackgroundTransparency = 1,
-            TextColor3 = Color3.fromRGB(255,255,255),
-            Size = UDim2.new(1, 0, 0, 30),
-            BorderSizePixel = 0
-        })
-        local tgrad = createObject("UIGradient", {
-            Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(192,192,192))
-            }),
-            Rotation = 45
-        })
+        local lbl = createObject("TextLabel", {Text = text, Font = Enum.Font.Gotham, TextScaled = true, BackgroundTransparency = 1, TextColor3 = Color3.fromRGB(255,255,255), Size = UDim2.new(1,0,0,30), BorderSizePixel = 0})
+        local tgrad = createObject("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(192,192,192))}), Rotation = 45})
         tgrad.Parent = lbl
         lbl.Parent = info
     end
-
     spawn(function()
         while wait(1) do
             if frame and frame.Parent then
@@ -416,14 +375,12 @@ function ShadieUI:setupHome()
             else break end
         end
     end)
-
-    if self.updateAvailable then self:showUpdatePrompt() end
+    if self.updateAvailable and not self.updateApplied then self:showUpdatePrompt() end
 end
 
 function ShadieUI:setupLocal()
     local frame = self.categoryFrames["Local"]
     if not frame then return end
-
     self:createItem("Set Walk Speed", "Local", true, function(value)
         local speed = tonumber(value)
         if speed then
@@ -439,7 +396,6 @@ function ShadieUI:setupLocal()
             self:notify("Local", "Invalid speed value", 2)
         end
     end)
-
     self:createItem("Set Jump Power", "Local", true, function(value)
         local jump = tonumber(value)
         if jump then
@@ -455,7 +411,6 @@ function ShadieUI:setupLocal()
             self:notify("Local", "Invalid jump power", 2)
         end
     end)
-
     self:createItem("Set Gravity", "Local", true, function(value)
         local valid, num = self:checkInput(value, 0, 10000)
         if valid then
@@ -465,7 +420,6 @@ function ShadieUI:setupLocal()
             self:notify("Local", "Invalid gravity value", 2)
         end
     end)
-
     self:createItem("Set Hip Height", "Local", true, function(value)
         local hip = tonumber(value)
         if hip then
@@ -481,12 +435,10 @@ function ShadieUI:setupLocal()
             self:notify("Local", "Invalid hip height", 2)
         end
     end)
-
     self:createItem("NoClip", "Local", false, function()
         self.noclipEnabled = not self.noclipEnabled
         self:notify("Local", "NoClip " .. (self.noclipEnabled and "Enabled" or "Disabled"), 2)
     end)
-
     self:createItem("Spin", "Local", true, function(value)
         if value and value ~= "" then
             local newSpeed = tonumber(value)
@@ -503,22 +455,18 @@ function ShadieUI:setupLocal()
         end
         self:toggleSpin()
     end)
-
     self:createItem("Float", "Local", false, function()
         self.floatEnabled = not self.floatEnabled
         self:notify("Local", "Float " .. (self.floatEnabled and "Enabled" or "Disabled"), 2)
     end)
-
     self:createItem("Bunny Hop", "Local", false, function()
         self.bunnyHopEnabled = not self.bunnyHopEnabled
         self:notify("Local", "Bunny Hop " .. (self.bunnyHopEnabled and "Enabled" or "Disabled"), 2)
     end)
-
     self:createItem("Infinity Jump", "Local", false, function()
         self.infinityJumpEnabled = not self.infinityJumpEnabled
         self:notify("Local", "Infinity Jump " .. (self.infinityJumpEnabled and "Enabled" or "Disabled"), 2)
     end)
-
     self:createItem("Reset Stats", "Local", false, function()
         local character = localPlayer.Character
         if character then
@@ -531,14 +479,12 @@ function ShadieUI:setupLocal()
         Workspace.Gravity = 196.2
         self:notify("Local", "Stats Reset", 2)
     end)
-
     self:createItem("Respawn", "Local", false, function()
         if localPlayer.Character then
             localPlayer.Character:BreakJoints()
             self:notify("Local", "Respawn triggered", 2)
         end
     end)
-
     self:createItem("Play Animation", "Local", true, function(animId)
         self:playAnimation(animId)
     end)
@@ -547,7 +493,6 @@ end
 function ShadieUI:setupPlayer()
     local frame = self.categoryFrames["Player"]
     if not frame then return end
-
     self:createItem("ESP", "Player", false, function()
         self.espEnabled = not self.espEnabled
         if not self.espEnabled then
@@ -560,7 +505,6 @@ function ShadieUI:setupPlayer()
         end
         self:notify("Player", "ESP " .. (self.espEnabled and "Enabled" or "Disabled"), 2)
     end)
-
     self:createItem("Highlights", "Player", false, function()
         self.highlightsActive = not self.highlightsActive
         if self.highlightsActive then
@@ -584,7 +528,6 @@ function ShadieUI:setupPlayer()
             self:notify("Player", "Highlights Disabled", 2)
         end
     end)
-
     self:createItem("Teleport Random", "Player", false, function()
         local targets = {}
         for _, p in ipairs(Players:GetPlayers()) do
@@ -602,7 +545,6 @@ function ShadieUI:setupPlayer()
             self:notify("Player", "No target found", 2)
         end
     end)
-
     self:createItem("Teleport Behind", "Player", false, function()
         local targets = {}
         for _, p in ipairs(Players:GetPlayers()) do
@@ -627,7 +569,6 @@ end
 function ShadieUI:setupWorkspace()
     local frame = self.categoryFrames["Workspace"]
     if not frame then return end
-
     self:createItem("Day-Night Cycle", "Workspace", false, function()
         if not self.dayNightCycleActive then
             self:startDayNightCycle()
@@ -637,7 +578,6 @@ function ShadieUI:setupWorkspace()
             self:notify("Workspace", "Day-Night Cycle Stopped", 2)
         end
     end)
-
     self:createItem("Gravity", "Workspace", true, function(value)
         local valid, num = self:checkInput(value, 0, 10000)
         if valid then
@@ -647,7 +587,6 @@ function ShadieUI:setupWorkspace()
             self:notify("Workspace", "Invalid gravity value", 2)
         end
     end)
-
     self:createItem("Camera FOV", "Workspace", true, function(value)
         local fov = tonumber(value)
         if fov then
@@ -660,7 +599,6 @@ function ShadieUI:setupWorkspace()
             self:notify("Workspace", "Invalid FOV", 2)
         end
     end)
-
     self:createItem("Camera Min Zoom", "Workspace", true, function(value)
         local minZoom = tonumber(value)
         if minZoom then
@@ -673,7 +611,6 @@ function ShadieUI:setupWorkspace()
             self:notify("Workspace", "Invalid Min Zoom", 2)
         end
     end)
-
     self:createItem("Camera Max Zoom", "Workspace", true, function(value)
         local maxZoom = tonumber(value)
         if maxZoom then
@@ -691,7 +628,6 @@ end
 function ShadieUI:setupBackpack()
     local frame = self.categoryFrames["Backpack"]
     if not frame then return end
-
     self:createItem("Steal Items", "Backpack", false, function()
         local stolen, withTools, withoutTools = 0, 0, 0
         for _, p in ipairs(Players:GetPlayers()) do
@@ -716,7 +652,11 @@ function ShadieUI:setupBackpack()
                         end
                     end
                 end
-                if foundTool then withTools = withTools + 1 else withoutTools = withoutTools + 1 end
+                if foundTool then
+                    withTools = withTools + 1
+                else
+                    withoutTools = withoutTools + 1
+                end
             end
         end
         if stolen > 0 then
@@ -725,7 +665,6 @@ function ShadieUI:setupBackpack()
             self:notify("Backpack", "No tools stolen (" .. withoutTools .. " without tools)", 2)
         end
     end)
-
     self:createItem("Equip All", "Backpack", false, function()
         if localPlayer.Backpack and #localPlayer.Backpack:GetChildren() > 0 then
             local humanoid = localPlayer.Character and localPlayer.Character:FindFirstChildOfClass("Humanoid")
@@ -741,7 +680,6 @@ function ShadieUI:setupBackpack()
             self:notify("Backpack", "No tools in Backpack", 2)
         end
     end)
-
     self:createItem("Clear Backpack", "Backpack", false, function()
         local count = 0
         for _, tool in ipairs(localPlayer.Backpack:GetChildren()) do
@@ -756,7 +694,6 @@ function ShadieUI:setupBackpack()
             self:notify("Backpack", "Backpack is empty", 2)
         end
     end)
-
     self:createItem("Drop All", "Backpack", false, function()
         local count = 0
         for _, tool in ipairs(localPlayer.Backpack:GetChildren()) do
@@ -779,7 +716,6 @@ function ShadieUI:setupBackpack()
             self:notify("Backpack", "No tools to drop", 2)
         end
     end)
-
     self:createItem("Duplicate All", "Backpack", false, function()
         local count = 0
         for _, tool in ipairs(localPlayer.Backpack:GetChildren()) do
@@ -835,19 +771,19 @@ function ShadieUI:startDayNightCycle()
         Lighting.ClockTime = (Lighting.ClockTime + dt * 0.1) % 24
         if Lighting.ClockTime >= 6 and Lighting.ClockTime < 18 then
             Lighting.Brightness = 1.2
-            Lighting.OutdoorAmbient = Color3.fromRGB(200, 200, 200)
-            Lighting.ColorShift_Top = Color3.fromRGB(210, 210, 255)
-            Lighting.ColorShift_Bottom = Color3.fromRGB(255, 255, 255)
+            Lighting.OutdoorAmbient = Color3.fromRGB(200,200,200)
+            Lighting.ColorShift_Top = Color3.fromRGB(210,210,255)
+            Lighting.ColorShift_Bottom = Color3.fromRGB(255,255,255)
         elseif Lighting.ClockTime >= 18 and Lighting.ClockTime < 22 then
             Lighting.Brightness = 0.8
-            Lighting.OutdoorAmbient = Color3.fromRGB(100, 100, 130)
-            Lighting.ColorShift_Top = Color3.fromRGB(90, 90, 110)
-            Lighting.ColorShift_Bottom = Color3.fromRGB(80, 80, 100)
+            Lighting.OutdoorAmbient = Color3.fromRGB(100,100,130)
+            Lighting.ColorShift_Top = Color3.fromRGB(90,90,110)
+            Lighting.ColorShift_Bottom = Color3.fromRGB(80,80,100)
         else
             Lighting.Brightness = 0.5
-            Lighting.OutdoorAmbient = Color3.fromRGB(50, 50, 70)
-            Lighting.ColorShift_Top = Color3.fromRGB(40, 40, 60)
-            Lighting.ColorShift_Bottom = Color3.fromRGB(30, 30, 50)
+            Lighting.OutdoorAmbient = Color3.fromRGB(50,50,70)
+            Lighting.ColorShift_Top = Color3.fromRGB(40,40,60)
+            Lighting.ColorShift_Bottom = Color3.fromRGB(30,30,50)
         end
     end)
 end
@@ -880,12 +816,11 @@ function ShadieUI:checkForUpdates()
         local url = "https://raw.githubusercontent.com/ShadieGit/Shadie-Ui/refs/heads/main/Main.lua"
         local result = httpGet(url)
         if result then
-            local remoteVersion = result:match("UPDATE%s+(%S+)")
-            if remoteVersion and remoteVersion ~= self.version then
+            local remoteSignature = result:match("SUI_SIGNATURE:(%S+)")
+            if remoteSignature and remoteSignature ~= self.localSignature and not self.updateApplied then
                 self.updateAvailable = true
-                self.remoteVersion = remoteVersion
                 self.remoteCode = result
-                self:notify("Update", "New version: " .. remoteVersion, 5)
+                self:notify("Update", "New update available", 5)
                 wait(1)
                 if self.categoryFrames["Home"] then
                     self:showUpdatePrompt()
@@ -896,49 +831,19 @@ function ShadieUI:checkForUpdates()
 end
 
 function ShadieUI:showUpdatePrompt()
-    if self.updatePromptShown then return end
+    if self.updatePromptShown or self.updateApplied then return end
     self.updatePromptShown = true
     local frame = self.categoryFrames["Home"]
     if not frame then return end
-    local prompt = createObject("Frame", {
-        Name = "UpdatePrompt",
-        Size = UDim2.new(1, -16, 0, 100),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = Color3.fromRGB(50, 50, 50),
-        BorderSizePixel = 0
-    })
-    local grad = createObject("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(138, 43, 226)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(75, 0, 130))
-        }),
-        Rotation = 45
-    })
+    local prompt = createObject("Frame", {Name = "UpdatePrompt", Size = UDim2.new(1, -16, 0, 100), BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(50,50,50), BorderSizePixel = 0})
+    local grad = createObject("UIGradient", {Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(138,43,226)), ColorSequenceKeypoint.new(1, Color3.fromRGB(75,0,130))}), Rotation = 45})
     grad.Parent = prompt
-    local crn = createObject("UICorner", {CornerRadius = UDim.new(0, 8)})
+    local crn = createObject("UICorner", {CornerRadius = UDim.new(0,8)})
     crn.Parent = prompt
     prompt.Parent = frame
-    local label = createObject("TextLabel", {
-        Text = "Update detected. Restart the script?",
-        Size = UDim2.new(1, 0, 0.6, 0),
-        BackgroundTransparency = 1,
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        BorderSizePixel = 0
-    })
+    local label = createObject("TextLabel", {Text = "Update detected. Restart the script?", Size = UDim2.new(1,0,0.6,0), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = Color3.fromRGB(255,255,255), BorderSizePixel = 0})
     label.Parent = prompt
-    local btn = createObject("TextButton", {
-        Text = "Restart",
-        Size = UDim2.new(0, 100, 0, 40),
-        Position = UDim2.new(0.5, -50, 0.65, 0),
-        BackgroundTransparency = 0,
-        BackgroundColor3 = Color3.fromRGB(200, 50, 50),
-        Font = Enum.Font.GothamBold,
-        TextScaled = true,
-        TextColor3 = Color3.fromRGB(255, 255, 255),
-        BorderSizePixel = 0
-    })
+    local btn = createObject("TextButton", {Text = "Restart", Size = UDim2.new(0,100,0,40), Position = UDim2.new(0.5, -50, 0.65, 0), BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(200,50,50), Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = Color3.fromRGB(255,255,255), BorderSizePixel = 0})
     btn.Parent = prompt
     btn.MouseButton1Click:Connect(function()
         self:applyUpdate()
@@ -947,6 +852,7 @@ end
 
 function ShadieUI:applyUpdate()
     if self.screenGui then self.screenGui:Destroy() end
+    self.updateApplied = true
     self:notify("Update", "Updating... please wait.", 3)
     local success, func = pcall(loadstring, self.remoteCode)
     if success and func then
@@ -958,22 +864,22 @@ end
 
 Players.PlayerAdded:Connect(function(p)
     p.CharacterAdded:Connect(function(character)
-        if ShadieUI.highlightsActive and p ~= localPlayer then
+        if self.highlightsActive and p ~= localPlayer then
             if not character:FindFirstChild("Highlight") then
                 local hl = Instance.new("Highlight")
-                hl.FillColor = Color3.new(0, 1, 0)
-                hl.OutlineColor = Color3.new(1, 1, 1)
+                hl.FillColor = Color3.new(0,1,0)
+                hl.OutlineColor = Color3.new(1,1,1)
                 hl.Parent = character
-                ShadieUI.highlightObjects[p.Name] = hl
+                self.highlightObjects[p.Name] = hl
             end
         end
     end)
 end)
 
 Players.PlayerRemoving:Connect(function(p)
-    if ShadieUI.highlightObjects[p.Name] then
-        ShadieUI.highlightObjects[p.Name]:Destroy()
-        ShadieUI.highlightObjects[p.Name] = nil
+    if self.highlightObjects[p.Name] then
+        self.highlightObjects[p.Name]:Destroy()
+        self.highlightObjects[p.Name] = nil
     end
 end)
 
@@ -1002,15 +908,15 @@ local function updateESP()
                         ShadieUI.espObjects[p.Name] = {box = box, tracer = tracer, label = label}
                     end
                     local esp = ShadieUI.espObjects[p.Name]
-                    local color = Color3.fromRGB(255, 0, 0)
+                    local color = Color3.fromRGB(255,0,0)
                     if myPos then
                         local dot = otherHead.CFrame.LookVector:Dot((myPos - otherHead.Position).Unit)
-                        if dot > 0.95 then color = Color3.new(1, 1, 1) end
+                        if dot > 0.95 then color = Color3.new(1,1,1) end
                     end
                     esp.box.Color = color
                     esp.box.Position = Vector2.new(pos.X - 25, pos.Y - 25)
-                    esp.box.Size = Vector2.new(50, 50)
-                    esp.tracer.From = Vector2.new(Workspace.CurrentCamera.ViewportSize.X / 2, Workspace.CurrentCamera.ViewportSize.Y)
+                    esp.box.Size = Vector2.new(50,50)
+                    esp.tracer.From = Vector2.new(Workspace.CurrentCamera.ViewportSize.X/2, Workspace.CurrentCamera.ViewportSize.Y)
                     esp.tracer.To = Vector2.new(pos.X, pos.Y)
                     esp.label.Position = Vector2.new(pos.X, pos.Y - 30)
                     esp.box.Visible = true
@@ -1111,9 +1017,7 @@ UserInputService.JumpRequest:Connect(function()
 end)
 
 VirtualUser:CaptureController()
-localPlayer.Idled:Connect(function()
-    pcall(function() VirtualUser:ClickButton2(Vector2.new(0, 0)) end)
-end)
+localPlayer.Idled:Connect(function() pcall(function() VirtualUser:ClickButton2(Vector2.new(0,0)) end) end)
 
 ShadieUI:initializeUI()
 ShadieUI:initializeCategories()
