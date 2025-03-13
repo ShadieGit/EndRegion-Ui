@@ -1,0 +1,9 @@
+{
+  "version": "3.3",
+  "message": "I've added new features, improved performance, and fixed some bugs!",
+  "changelog": [
+    "Improved user interface for better usability",
+    "Added auto-update feature",
+    "Fixed issue with Fling not responding correctly"
+  ]
+}
