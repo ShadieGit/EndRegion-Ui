@@ -26,26 +26,26 @@ local function createInstance(className, props)
 	return inst
 end
 
-local UI = {}
-UI.version = "4.0"
-UI.signature = "SUI_SIGNATURE:4.0_Live"
-UI.errors = {}
-UI.highlights = {}
-UI.espElements = {}
-UI.categoryButtons = {}
-UI.categoryFrames = {}
-UI.categoryOrder = {}
-UI.features = {ESP = false, Spin = false, NoClip = false, BunnyHop = false, InfinityJump = false, Highlights = false, DayNightCycle = false}
-UI.lastNotifs = {}
-UI.lastBunnyTime = 0
-UI.spinSpeed = 5
-UI.remoteCode = nil
-UI.updateAvailable = false
-UI.updateApplied = false
-UI.updatePromptShown = false
-UI.featureCallbacks = {}
+local ShadieUI = {}
+ShadieUI.version = "4.0"
+ShadieUI.signature = "SUI_SIGNATURE:4.0_Live"
+ShadieUI.errors = {}
+ShadieUI.highlights = {}
+ShadieUI.espElements = {}
+ShadieUI.categoryButtons = {}
+ShadieUI.categoryFrames = {}
+ShadieUI.categoryOrder = {}
+ShadieUI.features = {ESP = false, Spin = false, NoClip = false, BunnyHop = false, InfinityJump = false, Highlights = false, DayNightCycle = false}
+ShadieUI.lastNotifs = {}
+ShadieUI.lastBunnyTime = 0
+ShadieUI.spinSpeed = 5
+ShadieUI.remoteCode = nil
+ShadieUI.updateAvailable = false
+ShadieUI.updateApplied = false
+ShadieUI.updatePromptShown = false
+ShadieUI.featureCallbacks = {}
 
-function UI:flipFeature(feature)
+function ShadieUI:flipFeature(feature)
 	self.features[feature] = not self.features[feature]
 	if self.featureCallbacks[feature] then
 		if self.features[feature] and self.featureCallbacks[feature].on then
@@ -57,7 +57,7 @@ function UI:flipFeature(feature)
 	self:notify("Local", feature .. " " .. (self.features[feature] and "Enabled" or "Disabled"), 2)
 end
 
-UI.featureCallbacks["Spin"] = {
+ShadieUI.featureCallbacks["Spin"] = {
 	on = function(self)
 		local char = player.Character or player.CharacterAdded:Wait()
 		local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -79,28 +79,24 @@ UI.featureCallbacks["Spin"] = {
 	end,
 }
 
-function UI:logError(msg)
+function ShadieUI:logError(msg)
 	table.insert(self.errors, {time = os.time(), error = msg})
 	warn("Error:", msg)
 end
 
-function UI:notify(title, text, duration)
-	title = title or "UI"
+function ShadieUI:notify(title, text, duration)
+	title = title or "ShadieUI"
 	duration = duration or 2
 	local now = tick()
 	self.lastNotifs = self.lastNotifs or {}
 	local key = title .. ":" .. text
-	if self.lastNotifs[key] and (now - self.lastNotifs[key] < duration) then
-		return
-	end
+	if self.lastNotifs[key] and (now - self.lastNotifs[key] < duration) then return end
 	self.lastNotifs[key] = now
-	pcall(function()
-		StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = duration})
-	end)
+	pcall(function() StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = duration}) end)
 	print("[" .. title .. "] " .. text)
 end
 
-function UI:checkInput(value, minVal, maxVal)
+function ShadieUI:checkInput(value, minVal, maxVal)
 	local num = tonumber(value)
 	if num and num >= minVal and num <= maxVal then
 		return true, num
@@ -108,11 +104,14 @@ function UI:checkInput(value, minVal, maxVal)
 	return false, num
 end
 
-function UI:createCategory(catName)
-	assert(type(catName) == "string" and catName ~= "", "Invalid category name!")
+--[[
+	Instead of createCategory, we now use addPage for creating a new section/page.
+]]
+function ShadieUI:addPage(pageName)
+	assert(type(pageName) == "string" and pageName ~= "", "Invalid page name!")
 	local btn = createInstance("TextButton", {
-		Name = catName.."Btn",
-		Text = catName,
+		Name = pageName.."Btn",
+		Text = pageName,
 		Size = UDim2.new(1, 0, 0, 40),
 		BackgroundTransparency = 0,
 		BackgroundColor3 = Color3.fromRGB(60,60,60),
@@ -134,33 +133,37 @@ function UI:createCategory(catName)
 	local corner = createInstance("UICorner", {CornerRadius = UDim.new(0, 6)})
 	corner.Parent = btn
 	btn.Parent = self.catPanel
-	self.categoryButtons[catName] = btn
-	self.categoryOrder[catName] = 0
-	btn.MouseButton1Click:Connect(function() self:switchCategory(catName) end)
+	self.categoryButtons[pageName] = btn
+	self.categoryOrder[pageName] = 0
+	btn.MouseButton1Click:Connect(function() self:switchPage(pageName) end)
 	local frame = createInstance("ScrollingFrame", {
-		Name = catName.."Frame",
+		Name = pageName.."Frame",
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 4,
 		ScrollingEnabled = true,
-		BackgroundColor3 = Color3.fromRGB(30,30,30)
+		BackgroundColor3 = Color3.fromRGB(30,30,30),
+		Position = UDim2.new(0,0,0,0)
 	})
 	local layout = createInstance("UIListLayout", {Padding = UDim.new(0,8), SortOrder = Enum.SortOrder.LayoutOrder})
 	layout.Parent = frame
 	frame.Parent = self.contentArea
-	self.categoryFrames[catName] = frame
+	self.categoryFrames[pageName] = frame
 	frame.Visible = false
 end
 
-function UI:createItem(itemName, cat, hasInput, action)
+--[[
+	Instead of createItem, we now use addButton to add a UI button/control.
+]]
+function ShadieUI:addButton(itemName, page, hasInput, action)
 	assert(type(itemName) == "string" and itemName ~= "", "Invalid item name")
-	assert(type(cat) == "string" and cat ~= "", "Invalid category")
+	assert(type(page) == "string" and page ~= "", "Invalid page")
 	assert(type(hasInput) == "boolean", "hasInput must be boolean")
 	assert(type(action) == "function", "Callback must be a function")
-	local parent = self.categoryFrames[cat]
+	local parent = self.categoryFrames[page]
 	if not parent then
-		self:notify("Error", "Category '"..cat.."' missing", 2)
+		self:notify("Error", "Page '"..page.."' missing", 2)
 		return
 	end
 	local container = createInstance("Frame", {
@@ -174,8 +177,8 @@ function UI:createItem(itemName, cat, hasInput, action)
 	cCorner.Parent = container
 	local cStroke = createInstance("UIStroke", {Color = Color3.fromRGB(70,70,70), Thickness = 1})
 	cStroke.Parent = container
-	container.LayoutOrder = self.categoryOrder[cat] or 0
-	self.categoryOrder[cat] = self.categoryOrder[cat] + 1
+	container.LayoutOrder = self.categoryOrder[page] or 0
+	self.categoryOrder[page] = self.categoryOrder[page] + 1
 	container.Parent = parent
 	local btn = createInstance("TextButton", {
 		Name = itemName.."Button",
@@ -242,24 +245,66 @@ function UI:createItem(itemName, cat, hasInput, action)
 	end
 end
 
-function UI:initializeUI()
+function ShadieUI:playOpeningAnim()
+	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local goal = {BackgroundTransparency = 0.1, Size = UDim2.new(0,700,0,400), Position = UDim2.new(0.5, -350, 0.5, -200)}
+	local tween = TweenService:Create(self.mainFrame, tweenInfo, goal)
+	self.mainFrame.Visible = true
+	tween:Play()
+end
+
+function ShadieUI:playClosingAnim()
+	local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+	local goal = {BackgroundTransparency = 1, Size = UDim2.new(0,350,0,200), Position = UDim2.new(0.5, -175, 0.5, -100)}
+	local tween = TweenService:Create(self.mainFrame, tweenInfo, goal)
+	tween:Play()
+	tween.Completed:Connect(function()
+		self.mainFrame.Visible = false
+	end)
+end
+
+function ShadieUI:switchPage(pageName)
+	if self.categoryFrames and self.categoryFrames[pageName] then
+		local currentPage
+		for name, frame in pairs(self.categoryFrames) do
+			if frame.Visible then
+				currentPage = frame
+			end
+		end
+		local newPage = self.categoryFrames[pageName]
+		if currentPage then
+			local tweenOut = TweenService:Create(currentPage, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(-1,0,0,0)})
+			tweenOut:Play()
+			tweenOut.Completed:Connect(function()
+				currentPage.Visible = false
+			end)
+		end
+		newPage.Position = UDim2.new(1,0,0,0)
+		newPage.Visible = true
+		local tweenIn = TweenService:Create(newPage, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0,0,0,0)})
+		tweenIn:Play()
+	else
+		self:notify("Error", "Page '" .. tostring(pageName) .. "' not found", 2)
+	end
+end
+
+function ShadieUI:initializeCategories()
+	local pages = {"Home", "Local", "Player", "Workspace", "Backpack"}
+	for _, p in ipairs(pages) do
+		self:addPage(p)
+	end
+	self:switchPage("Home")
+end
+
+function ShadieUI:initializeUI()
 	local pg = player:WaitForChild("PlayerGui")
 	local sg = createInstance("ScreenGui", {Name = "ShadieUI_Main", ResetOnSpawn = false})
 	sg.Parent = pg
 	self.screenGui = sg
-	local shadow = createInstance("Frame", {
-		Name = "Shadow",
-		Size = UDim2.new(0,710,0,410),
-		Position = UDim2.new(0.5, -355, 0.5, -205),
-		BackgroundColor3 = Color3.new(0,0,0),
-		BackgroundTransparency = 0.7,
-		BorderSizePixel = 0
-	})
-	shadow.Parent = sg
 	local mainFrame = createInstance("Frame", {
 		Name = "MainFrame",
 		Size = UDim2.new(0,700,0,400),
-		Position = UDim2.new(0.5, -350,0.5,-200),
+		Position = UDim2.new(0.5, -350, 0.5, -200),
 		BackgroundTransparency = 0.1,
 		BackgroundColor3 = Color3.fromRGB(20,20,20),
 		BorderSizePixel = 0,
@@ -326,7 +371,6 @@ function UI:initializeUI()
 		if self.mainFrame.Visible then
 			self:playClosingAnim()
 		else
-			self.mainFrame.Visible = true
 			self:playOpeningAnim()
 		end
 	end)
@@ -363,25 +407,7 @@ function UI:initializeUI()
 	self.contentArea = content
 end
 
-function UI:switchCategory(catName)
-	if self.categoryFrames and self.categoryFrames[catName] then
-		for name, frame in pairs(self.categoryFrames) do
-			frame.Visible = (name == catName)
-		end
-	else
-		self:notify("Error", "Category '" .. tostring(catName) .. "' not found", 2)
-	end
-end
-
-function UI:initializeCategories()
-	local cats = {"Home", "Local", "Player", "Workspace", "Backpack"}
-	for _, cat in ipairs(cats) do
-		self:createCategory(cat)
-	end
-	self:switchCategory("Home")
-end
-
-function UI:setupHome()
+function ShadieUI:setupHome()
 	local frame = self.categoryFrames["Home"]
 	if not frame then return end
 	local card = createInstance("Frame", {
@@ -469,15 +495,13 @@ function UI:setupHome()
 			else break end
 		end
 	end)
-	if self.updateAvailable and not self.updateApplied then 
-		self:showUpdatePrompt() 
-	end
+	if self.updateAvailable and not self.updateApplied then self:showUpdatePrompt() end
 end
 
-function UI:setupLocal()
+function ShadieUI:setupLocal()
 	local frame = self.categoryFrames["Local"]
 	if not frame then return end
-	self:createItem("Set Walk Speed", "Local", true, function(value)
+	self:addButton("Set Walk Speed", "Local", true, function(value)
 		local speed = tonumber(value)
 		if speed then
 			local char = player.Character
@@ -492,7 +516,7 @@ function UI:setupLocal()
 			self:notify("Local", "Invalid speed value", 2)
 		end
 	end)
-	self:createItem("Set Jump Power", "Local", true, function(value)
+	self:addButton("Set Jump Power", "Local", true, function(value)
 		local jump = tonumber(value)
 		if jump then
 			local char = player.Character
@@ -507,7 +531,7 @@ function UI:setupLocal()
 			self:notify("Local", "Invalid jump power", 2)
 		end
 	end)
-	self:createItem("Set Gravity", "Local", true, function(value)
+	self:addButton("Set Gravity", "Local", true, function(value)
 		local valid, num = self:checkInput(value, 0, 10000)
 		if valid then
 			Workspace.Gravity = num
@@ -516,7 +540,7 @@ function UI:setupLocal()
 			self:notify("Local", "Invalid gravity value", 2)
 		end
 	end)
-	self:createItem("Set Hip Height", "Local", true, function(value)
+	self:addButton("Set Hip Height", "Local", true, function(value)
 		local hip = tonumber(value)
 		if hip then
 			local char = player.Character
@@ -531,10 +555,10 @@ function UI:setupLocal()
 			self:notify("Local", "Invalid hip height", 2)
 		end
 	end)
-	self:createItem("NoClip", "Local", false, function()
+	self:addButton("NoClip", "Local", false, function()
 		self:flipFeature("NoClip")
 	end)
-	self:createItem("Spin (enter speed)", "Local", true, function(value)
+	self:addButton("Spin (enter speed)", "Local", true, function(value)
 		if value and value ~= "" then
 			local spd = tonumber(value)
 			if spd then
@@ -546,7 +570,7 @@ function UI:setupLocal()
 		end
 		self:flipFeature("Spin")
 	end)
-	self:createItem("Platform Stand", "Local", false, function()
+	self:addButton("Platform Stand", "Local", false, function()
 		local char = player.Character
 		if char then
 			local hum = char:FindFirstChildOfClass("Humanoid")
@@ -556,13 +580,13 @@ function UI:setupLocal()
 			end
 		end
 	end)
-	self:createItem("Bunny Hop", "Local", false, function()
+	self:addButton("Bunny Hop", "Local", false, function()
 		self:flipFeature("BunnyHop")
 	end)
-	self:createItem("Infinity Jump", "Local", false, function()
+	self:addButton("Infinity Jump", "Local", false, function()
 		self:flipFeature("InfinityJump")
 	end)
-	self:createItem("Reset Stats", "Local", false, function()
+	self:addButton("Reset Stats", "Local", false, function()
 		local char = player.Character
 		if char then
 			local hum = char:FindFirstChildOfClass("Humanoid")
@@ -574,27 +598,27 @@ function UI:setupLocal()
 		Workspace.Gravity = 196.2
 		self:notify("Local", "Stats Reset", 2)
 	end)
-	self:createItem("Respawn", "Local", false, function()
+	self:addButton("Respawn", "Local", false, function()
 		if player.Character then
 			player.Character:BreakJoints()
 			self:notify("Local", "Respawn triggered", 2)
 		end
 	end)
-	self:createItem("Play Animation", "Local", true, function(animId)
+	self:addButton("Play Animation", "Local", true, function(animId)
 		self:playAnimation(animId)
 	end)
 end
 
-function UI:setupPlayer()
+function ShadieUI:setupPlayer()
 	local frame = self.categoryFrames["Player"]
 	if not frame then return end
-	self:createItem("ESP", "Player", false, function()
+	self:addButton("ESP", "Player", false, function()
 		self:flipFeature("ESP")
 	end)
-	self:createItem("Highlights", "Player", false, function()
+	self:addButton("Highlights", "Player", false, function()
 		self:flipFeature("Highlights")
 	end)
-	self:createItem("Teleport Random", "Player", false, function()
+	self:addButton("Teleport Random", "Player", false, function()
 		local targets = {}
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -611,7 +635,7 @@ function UI:setupPlayer()
 			self:notify("Player", "No target found", 2)
 		end
 	end)
-	self:createItem("Teleport Behind", "Player", false, function()
+	self:addButton("Teleport Behind", "Player", false, function()
 		local targets = {}
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -632,10 +656,10 @@ function UI:setupPlayer()
 	end)
 end
 
-function UI:setupWorkspace()
+function ShadieUI:setupWorkspace()
 	local frame = self.categoryFrames["Workspace"]
 	if not frame then return end
-	self:createItem("Day-Night Cycle", "Workspace", false, function()
+	self:addButton("Day-Night Cycle", "Workspace", false, function()
 		if not self.features.DayNightCycle then
 			self:startDayNightCycle()
 			self:notify("Workspace", "Day-Night Cycle Started", 2)
@@ -645,7 +669,7 @@ function UI:setupWorkspace()
 		end
 		self:flipFeature("DayNightCycle")
 	end)
-	self:createItem("Gravity", "Workspace", true, function(value)
+	self:addButton("Gravity", "Workspace", true, function(value)
 		local valid, num = self:checkInput(value, 0, 10000)
 		if valid then
 			Workspace.Gravity = num
@@ -654,7 +678,7 @@ function UI:setupWorkspace()
 			self:notify("Workspace", "Invalid gravity value", 2)
 		end
 	end)
-	self:createItem("Camera FOV", "Workspace", true, function(value)
+	self:addButton("Camera FOV", "Workspace", true, function(value)
 		local fov = tonumber(value)
 		if fov then
 			local cam = Workspace.CurrentCamera
@@ -666,7 +690,7 @@ function UI:setupWorkspace()
 			self:notify("Workspace", "Invalid FOV", 2)
 		end
 	end)
-	self:createItem("Camera Min Zoom", "Workspace", true, function(value)
+	self:addButton("Camera Min Zoom", "Workspace", true, function(value)
 		local minZoom = tonumber(value)
 		if minZoom then
 			local cam = Workspace.CurrentCamera
@@ -678,7 +702,7 @@ function UI:setupWorkspace()
 			self:notify("Workspace", "Invalid Min Zoom", 2)
 		end
 	end)
-	self:createItem("Camera Max Zoom", "Workspace", true, function(value)
+	self:addButton("Camera Max Zoom", "Workspace", true, function(value)
 		local maxZoom = tonumber(value)
 		if maxZoom then
 			local cam = Workspace.CurrentCamera
@@ -692,11 +716,11 @@ function UI:setupWorkspace()
 	end)
 end
 
-function UI:setupBackpack()
+function ShadieUI:setupBackpack()
 	local frame = self.categoryFrames["Backpack"]
 	if not frame then return end
-	self:createItem("Steal Items", "Backpack", false, function()
-		local stolen, playersWith, playersWithout = 0, 0, 0
+	self:addButton("Steal Items", "Backpack", false, function()
+		local stolen, withItems, withoutItems = 0, 0, 0
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= player then
 				local bp = p:FindFirstChild("Backpack")
@@ -720,19 +744,19 @@ function UI:setupBackpack()
 					end
 				end
 				if found then
-					playersWith = playersWith + 1
+					withItems = withItems + 1
 				else
-					playersWithout = playersWithout + 1
+					withoutItems = withoutItems + 1
 				end
 			end
 		end
 		if stolen > 0 then
-			self:notify("Backpack", "Stolen " .. stolen .. " items from " .. playersWith .. " players", 2)
+			self:notify("Backpack", "Stolen " .. stolen .. " items from " .. withItems .. " players", 2)
 		else
-			self:notify("Backpack", "No tools stolen (" .. playersWithout .. " without tools)", 2)
+			self:notify("Backpack", "No tools stolen (" .. withoutItems .. " without tools)", 2)
 		end
 	end)
-	self:createItem("Equip All", "Backpack", false, function()
+	self:addButton("Equip All", "Backpack", false, function()
 		if player.Backpack and #player.Backpack:GetChildren() > 0 then
 			local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 			if hum then
@@ -747,7 +771,7 @@ function UI:setupBackpack()
 			self:notify("Backpack", "No tools in Backpack", 2)
 		end
 	end)
-	self:createItem("Clear Backpack", "Backpack", false, function()
+	self:addButton("Clear Backpack", "Backpack", false, function()
 		local count = 0
 		for _, tool in ipairs(player.Backpack:GetChildren()) do
 			if tool:IsA("Tool") then
@@ -761,7 +785,7 @@ function UI:setupBackpack()
 			self:notify("Backpack", "Backpack is empty", 2)
 		end
 	end)
-	self:createItem("Drop All", "Backpack", false, function()
+	self:addButton("Drop All", "Backpack", false, function()
 		local count = 0
 		for _, tool in ipairs(player.Backpack:GetChildren()) do
 			if tool:IsA("Tool") then
@@ -783,7 +807,7 @@ function UI:setupBackpack()
 			self:notify("Backpack", "No tools to drop", 2)
 		end
 	end)
-	self:createItem("Duplicate All", "Backpack", false, function()
+	self:addButton("Duplicate All", "Backpack", false, function()
 		local count = 0
 		for _, tool in ipairs(player.Backpack:GetChildren()) do
 			if tool:IsA("Tool") then
@@ -796,7 +820,7 @@ function UI:setupBackpack()
 	end)
 end
 
-function UI:playAnimation(animId)
+function ShadieUI:playAnimation(animId)
 	if not player.Character then return self:notify("Animation", "Character unavailable", 2) end
 	local hum = player.Character:FindFirstChildOfClass("Humanoid")
 	if not hum then return self:notify("Animation", "Humanoid unavailable", 2) end
@@ -812,7 +836,7 @@ function UI:playAnimation(animId)
 	end
 end
 
-function UI:startDayNightCycle()
+function ShadieUI:startDayNightCycle()
 	if self.features.DayNightCycle then return end
 	self.features.DayNightCycle = true
 	local prevTime = tick()
@@ -840,14 +864,14 @@ function UI:startDayNightCycle()
 	end)
 end
 
-function UI:stopDayNightCycle()
+function ShadieUI:stopDayNightCycle()
 	if self.features.DayNightCycle and self.dayNightConn then
 		self.dayNightConn:Disconnect()
 		self.features.DayNightCycle = false
 	end
 end
 
-function UI:checkForUpdates()
+function ShadieUI:checkForUpdates()
 	spawn(function()
 		local url = "https://raw.githubusercontent.com/ShadieGit/Shadie-Ui/refs/heads/main/Main.lua"
 		local result = httpGet(url)
@@ -867,7 +891,7 @@ function UI:checkForUpdates()
 	end)
 end
 
-function UI:showUpdatePrompt()
+function ShadieUI:showUpdatePrompt()
 	if self.updatePromptShown or self.updateApplied then return end
 	self.updatePromptShown = true
 	local frame = self.categoryFrames["Home"]
@@ -876,13 +900,13 @@ function UI:showUpdatePrompt()
 		Name = "UpdatePrompt",
 		Size = UDim2.new(1, -16, 0, 100),
 		BackgroundTransparency = 0,
-		BackgroundColor3 = Color3.fromRGB(50,50,50),
+		BackgroundColor3 = Color3.fromRGB(70,70,70),
 		BorderSizePixel = 0
 	})
 	local grad = createInstance("UIGradient", {
 		Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(138,43,226)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(75,0,130))
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(100,100,100)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(70,70,70))
 		}),
 		Rotation = 45
 	})
@@ -905,7 +929,7 @@ function UI:showUpdatePrompt()
 		Size = UDim2.new(0,100,0,40),
 		Position = UDim2.new(0.5, -50, 0.65, 0),
 		BackgroundTransparency = 0,
-		BackgroundColor3 = Color3.fromRGB(200,50,50),
+		BackgroundColor3 = Color3.fromRGB(150,150,150),
 		Font = Enum.Font.GothamBold,
 		TextScaled = true,
 		TextColor3 = Color3.fromRGB(255,255,255),
@@ -917,7 +941,7 @@ function UI:showUpdatePrompt()
 	end)
 end
 
-function UI:applyUpdate()
+function ShadieUI:applyUpdate()
 	if self.screenGui then self.screenGui:Destroy() end
 	self.updateApplied = true
 	self:notify("Update", "Updating... please wait.", 3)
@@ -930,7 +954,7 @@ function UI:applyUpdate()
 end
 
 local function updateESP()
-	if UI.features.ESP then
+	if ShadieUI.features.ESP then
 		local myHead = player.Character and player.Character:FindFirstChild("Head")
 		local myPos = myHead and myHead.Position
 		for _, p in ipairs(Players:GetPlayers()) do
@@ -938,7 +962,7 @@ local function updateESP()
 				local otherHead = p.Character.Head
 				local pos, onscreen = Workspace.CurrentCamera:WorldToViewportPoint(otherHead.Position)
 				if onscreen then
-					if not UI.espElements[p.Name] then
+					if not ShadieUI.espElements[p.Name] then
 						local box = Drawing.new("Square")
 						box.Visible = true
 						box.Thickness = 2
@@ -954,9 +978,9 @@ local function updateESP()
 						label.Size = 20
 						label.Font = 2
 						label.Color = Color3.fromRGB(128,128,128)
-						UI.espElements[p.Name] = {box = box, tracer = tracer, label = label}
+						ShadieUI.espElements[p.Name] = {box = box, tracer = tracer, label = label}
 					end
-					local esp = UI.espElements[p.Name]
+					local esp = ShadieUI.espElements[p.Name]
 					local color = Color3.fromRGB(128,128,128)
 					if myPos then
 						local dot = otherHead.CFrame.LookVector:Dot((myPos - otherHead.Position).Unit)
@@ -972,42 +996,42 @@ local function updateESP()
 					esp.tracer.Visible = true
 					esp.label.Visible = true
 				else
-					if UI.espElements[p.Name] then
-						UI.espElements[p.Name].box.Visible = false
-						UI.espElements[p.Name].tracer.Visible = false
-						UI.espElements[p.Name].label.Visible = false
+					if ShadieUI.espElements[p.Name] then
+						ShadieUI.espElements[p.Name].box.Visible = false
+						ShadieUI.espElements[p.Name].tracer.Visible = false
+						ShadieUI.espElements[p.Name].label.Visible = false
 					end
 				end
 			end
 		end
 	else
-		for _, esp in pairs(UI.espElements) do
+		for _, esp in pairs(ShadieUI.espElements) do
 			if esp.box then esp.box:Remove() end
 			if esp.tracer then esp.tracer:Remove() end
 			if esp.label then esp.label:Remove() end
 		end
-		UI.espElements = {}
+		ShadieUI.espElements = {}
 	end
 end
 
 Players.PlayerAdded:Connect(function(p)
 	p.CharacterAdded:Connect(function(char)
-		if UI.features.Highlights and p ~= player then
+		if ShadieUI.features.Highlights and p ~= player then
 			if not char:FindFirstChild("Highlight") then
 				local hl = Instance.new("Highlight")
 				hl.FillColor = Color3.new(0,1,0)
 				hl.OutlineColor = Color3.new(1,1,1)
 				hl.Parent = char
-				UI.highlights[p.Name] = hl
+				ShadieUI.highlights[p.Name] = hl
 			end
 		end
 	end)
 end)
 
 Players.PlayerRemoving:Connect(function(p)
-	if UI.highlights[p.Name] then
-		UI.highlights[p.Name]:Destroy()
-		UI.highlights[p.Name] = nil
+	if ShadieUI.highlights[p.Name] then
+		ShadieUI.highlights[p.Name]:Destroy()
+		ShadieUI.highlights[p.Name] = nil
 	end
 end)
 
@@ -1015,78 +1039,72 @@ local function updateNoClipBunny()
 	local char = player.Character
 	if char then
 		local hrp = char:FindFirstChild("HumanoidRootPart")
-		if hrp and UI.features.NoClip then
+		if hrp and ShadieUI.features.NoClip then
 			for _, part in ipairs(char:GetDescendants()) do
 				if part:IsA("BasePart") then part.CanCollide = false end
 			end
 		end
-		if UI.features.BunnyHop then
+		if ShadieUI.features.BunnyHop then
 			local hum = char:FindFirstChildOfClass("Humanoid")
 			if hum and hum:GetState() == Enum.HumanoidStateType.Landed then
-				if tick() - UI.lastBunnyTime > 0.2 then
+				if tick() - ShadieUI.lastBunnyTime > 0.2 then
 					hum:ChangeState(Enum.HumanoidStateType.Jumping)
-					UI.lastBunnyTime = tick()
+					ShadieUI.lastBunnyTime = tick()
 				end
 			end
 		end
 	end
 end
 
-RunService.RenderStepped:Connect(function()
-	updateNoClipBunny()
-end)
+RunService.RenderStepped:Connect(function() updateNoClipBunny() end)
 
 local function resetJumpCount(char)
 	local hum = char:WaitForChild("Humanoid")
 	hum.StateChanged:Connect(function(_, new)
 		if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
-			UI.currentJumpCount = 0
+			ShadieUI.currentJumpCount = 0
 		end
 	end)
 end
 
 local function onCharacterAdded(char)
 	resetJumpCount(char)
-	UI.features.Spin = false
-	UI.features.NoClip = false
-	UI.features.BunnyHop = false
-	UI.features.InfinityJump = false
+	ShadieUI.features.Spin = false
+	ShadieUI.features.NoClip = false
+	ShadieUI.features.BunnyHop = false
+	ShadieUI.features.InfinityJump = false
 end
 
 player.CharacterAdded:Connect(onCharacterAdded)
 if player.Character then
 	resetJumpCount(player.Character)
-	UI.features.Spin = false
-	UI.features.NoClip = false
-	UI.features.BunnyHop = false
-	UI.features.InfinityJump = false
+	ShadieUI.features.Spin = false
+	ShadieUI.features.NoClip = false
+	ShadieUI.features.BunnyHop = false
+	ShadieUI.features.InfinityJump = false
 end
 
 UserInputService.JumpRequest:Connect(function()
-	if UI.features.InfinityJump then
+	if ShadieUI.features.InfinityJump then
 		local char = player.Character
 		if char then
 			local hum = char:FindFirstChildWhichIsA("Humanoid")
-			if hum then
-				hum:ChangeState(Enum.HumanoidStateType.Jumping)
-			end
+			if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
 		end
 	end
 end)
 
 VirtualUser:CaptureController()
-player.Idled:Connect(function()
-	pcall(function() VirtualUser:ClickButton2(Vector2.new(0,0)) end)
-end)
+player.Idled:Connect(function() pcall(function() VirtualUser:ClickButton2(Vector2.new(0,0)) end) end)
 
-UI:initializeUI()
-UI:initializeCategories()
-UI:setupHome()
-UI:setupLocal()
-UI:setupPlayer()
-UI:setupWorkspace()
-UI:setupBackpack()
-UI:notify("ShadieUI", "Loaded Successfully", 3)
-UI:checkForUpdates()
+ShadieUI:initializeUI()
+ShadieUI:initializeCategories()
+ShadieUI:setupHome()
+ShadieUI:setupLocal()
+ShadieUI:setupPlayer()
+ShadieUI:setupWorkspace()
+ShadieUI:setupBackpack()
+ShadieUI:notify("ShadieUI", "Loaded Successfully", 3)
+ShadieUI:checkForUpdates()
 
-return UI
+return ShadieUI
